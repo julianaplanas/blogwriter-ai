@@ -81,23 +81,36 @@ export default function AIBlogWriter() {
       .trim()
   }
 
-  // Helper: Insert images into markdown after title and before conclusion
-  const insertImagesIntoMarkdown = (markdown: string, images: Array<{ url: string; alt_text: string }>) => {
+  // Helper: Insert images into markdown in a natural way with source info
+  const insertImagesIntoMarkdown = (markdown: string, images: Array<{ url: string; alt_text: string; photographer?: string }>) => {
     if (!images || images.length === 0) return markdown;
-    // Find the first heading (title)
     const lines = markdown.split('\n');
-    let insertIndex = 1;
-    // Insert after the first non-empty line (usually the title)
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].trim() !== '') {
-        insertIndex = i + 1;
-        break;
-      }
+    // Find section headings (lines starting with ## or ###)
+    const sectionIndexes = lines
+      .map((line, idx) => (/^##+ /.test(line) ? idx : -1))
+      .filter(idx => idx > 0);
+    // Always insert after the intro (after first non-empty line)
+    let insertPoints = [1];
+    if (sectionIndexes.length > 0) {
+      insertPoints = [sectionIndexes[0]];
+      if (sectionIndexes.length > 1) insertPoints.push(sectionIndexes[1]);
+      if (sectionIndexes.length > 2) insertPoints.push(sectionIndexes[2]);
     }
-    // Prepare image markdown
-    const imageMarkdown = images.map(img => `![${img.alt_text || 'Blog image'}](${img.url})`).join('\n\n');
-    // Insert images
-    lines.splice(insertIndex, 0, imageMarkdown);
+    // If not enough sections, spread images evenly
+    while (insertPoints.length < images.length) {
+      insertPoints.push(lines.length - 1);
+    }
+    // Insert images at calculated points
+    let offset = 0;
+    images.forEach((img, i) => {
+      const caption = img.photographer
+        ? `*Image source: [${img.photographer}](${img.url})*`
+        : `*Image source: [Pexels](${img.url})*`;
+      const imgBlock = `![${img.alt_text || 'Blog image'}](${img.url})\n${caption}`;
+      const idx = Math.min(insertPoints[i] + offset, lines.length);
+      lines.splice(idx, 0, imgBlock);
+      offset++;
+    });
     return lines.join('\n');
   };
 
@@ -247,14 +260,9 @@ export default function AIBlogWriter() {
       })
       return
     }
-
     setIsGenerating(true)
-    
-    // Clear version history for new post
     await clearVersionHistory()
-    
     try {
-      // Use the enhanced endpoint that includes research and images
       const response = await fetch(`${API_BASE_URL}/generate-enhanced`, {
         method: "POST",
         headers: {
@@ -264,44 +272,33 @@ export default function AIBlogWriter() {
           topic: topic,
         }),
       })
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-
       const data = await response.json()
-      console.log("Backend response:", data) // Debug log
-      
-      // The backend returns: content, sources, images, metadata
-      const markdownWithImages = insertImagesIntoMarkdown(data.content, (data.images || []).map((image: any) => ({
-        url: image.medium_url || image.url || "",
-        alt_text: image.alt || image.photographer || "Blog image"
-      })));
+      // Insert images into markdown in a natural way
+      const markdownWithImages = insertImagesIntoMarkdown(
+        data.content,
+        (data.images || []).map((image: any) => ({
+          url: image.medium_url || image.url || "",
+          alt_text: image.alt || image.photographer || "Blog image",
+          photographer: image.photographer || undefined
+        }))
+      );
       const cleanedMarkdown = cleanMarkdown(markdownWithImages)
       setMarkdown(cleanedMarkdown)
       setCurrentPostId(data.id)
-      
       // Handle sources (research results)
       const references = (data.sources || []).map((source: any) => ({
         title: source.title || "Untitled",
         url: source.url || "#"
       }))
       setReferences(references)
-      
-      // Handle images
-      const formattedImages = (data.images || []).map((image: any) => ({
-        url: image.medium_url || image.url || "",
-        alt_text: image.alt || image.photographer || "Blog image"
-      }))
-      setImages(formattedImages)
-      
-      // Set metadata
       setMetadata({
         word_count: data.word_count || data.content.split(/\s+/).length,
         sources_count: references.length,
-        images_count: formattedImages.length
+        images_count: (data.images || []).length
       })
-
       // Create initial version in backend by tracking this as first version
       try {
         await fetch(`${API_BASE_URL}/edit`, {
@@ -312,22 +309,18 @@ export default function AIBlogWriter() {
           body: JSON.stringify({
             content: cleanedMarkdown,
             instruction: "Initial version - no changes",
+            post_id: data.id
           }),
         })
-        
-        // Fetch version history to get the initial version
-        await fetchVersionHistory()
+        await fetchVersionHistory(data.id)
       } catch (error) {
         console.error("Failed to create initial version:", error)
       }
-
-      // Clear previous edit info
       setEditInfo(null)
       setShowEditDetails(false)
-      setHasUsedUndo(false) // Reset undo state for new post
-
+      setHasUsedUndo(false)
       toast({
-        title: `Generated ${data.word_count} words with ${references.length} sources and ${formattedImages.length} images`,
+        title: `Generated ${data.word_count} words with ${references.length} sources and ${(data.images || []).length} images`,
       })
     } catch (error) {
       console.error("Generation error:", error)
@@ -335,7 +328,6 @@ export default function AIBlogWriter() {
         title: "Backend not running. Please start the FastAPI server.",
         variant: "destructive",
       })
-
       // Mock response for demo purposes
       const mockMarkdown = `# ${topic.charAt(0).toUpperCase() + topic.slice(1)}
 
@@ -396,8 +388,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
   }
 
   const handleEdit = async () => {
-    console.log("Edit button clicked!", { editInstruction, isEditing }); // Debug log
-    
     if (!editInstruction.trim() || editInstruction.length < 5) {
       toast({
         title: "Please provide editing instructions with at least 5 characters",
@@ -405,11 +395,8 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
       })
       return
     }
-
     setIsEditing(true)
     try {
-      console.log("Sending edit request to:", `${API_BASE_URL}/edit`); // Debug log
-      
       const response = await fetch(`${API_BASE_URL}/edit`, {
         method: "POST",
         headers: {
@@ -418,24 +405,17 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
         body: JSON.stringify({
           content: markdown,
           instruction: editInstruction,
+          post_id: currentPostId
         }),
       })
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Edit failed:", response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-
       const data = await response.json()
-      console.log("Edit response:", data) // Debug log
-      
-      // Update markdown content and clean it
       const cleanedMarkdown = cleanMarkdown(data.content)
       setMarkdown(cleanedMarkdown)
       setEditInstruction("")
-      
-      // Store detailed edit information
       setEditInfo({
         changes_summary: `Edited with instruction: "${data.instruction_applied}"`,
         model_used: data.model_used,
@@ -443,8 +423,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
         edited_at: data.edited_at,
         instruction_applied: data.instruction_applied
       })
-      
-      // Update word count
       if (metadata) {
         const newWordCount = data.content.split(/\s+/).length
         setMetadata({
@@ -452,19 +430,14 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
           word_count: newWordCount
         })
       }
-
       toast({
         title: "Blog post edited successfully",
         description: `Applied: ${data.instruction_applied}`
       })
-
-      // Refresh version history after successful edit
       setTimeout(async () => {
-        await fetchVersionHistory()
+        await fetchVersionHistory(currentPostId)
       }, 100)
-      
     } catch (error) {
-      console.error("Edit error:", error)
       toast({
         title: "Failed to edit blog post",
         description: "Please check your connection and try again.",
@@ -498,9 +471,10 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
     })
   }
 
-  const fetchVersionHistory = async () => {
+  const fetchVersionHistory = async (postId?: string | null) => {
+    if (!postId) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/edit/history`)
+      const response = await fetch(`${API_BASE_URL}/edit/history/${postId}`)
       if (response.ok) {
         const data = await response.json()
         setVersionHistory(data.versions || [])
@@ -508,13 +482,11 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
         setCurrentVersionId(currentVersion)
         setActualCurrentVersionId(currentVersion)
       } else {
-        console.error("Failed to fetch version history:", response.status)
         setVersionHistory([])
         setCurrentVersionId(null)
         setActualCurrentVersionId(null)
       }
     } catch (error) {
-      console.error("Failed to fetch version history:", error)
       setVersionHistory([])
       setCurrentVersionId(null)
       setActualCurrentVersionId(null)
@@ -619,7 +591,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
 
       // Refresh version history
       setTimeout(async () => {
-        await fetchVersionHistory()
+        await fetchVersionHistory(currentPostId)
         console.log("Version history refreshed")
       }, 100)
 
@@ -872,84 +844,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
               </div>
             )}
 
-            {/* Enhanced Edit Details */}
-            {editInfo && (
-              <div className="max-w-2xl mx-auto">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-medium text-blue-900">Latest Edit Details</h3>
-                    <button
-                      onClick={() => setShowEditDetails(!showEditDetails)}
-                      className="text-blue-700 hover:text-blue-900 text-sm"
-                    >
-                      {showEditDetails ? 'Hide Details' : 'Show Details'}
-                    </button>
-                  </div>
-                  
-                  {editInfo.changes_summary && (
-                    <div className="text-sm text-blue-800 mb-2">
-                      <strong>Applied:</strong> "{editInfo.instruction_applied}"
-                    </div>
-                  )}
-                  
-                  {editInfo.changes_summary && showEditDetails && (
-                    <div className="mt-3 space-y-2">
-                      <div className="text-sm">
-                        <strong className="text-blue-900">Changes Summary:</strong>
-                        <div className="bg-white rounded p-2 mt-1 font-mono text-xs">
-                          {editInfo.changes_summary.split('\n').map((line, i) => (
-                            <div key={i}>{line}</div>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {editInfo.diff_text && (
-                        <div className="text-sm">
-                          <strong className="text-blue-900">Changes Diff:</strong>
-                          <div className="bg-gray-900 text-green-400 rounded p-2 mt-1 font-mono text-xs max-h-32 overflow-y-auto">
-                            <pre className="whitespace-pre-wrap">{editInfo.diff_text}</pre>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="flex justify-between items-center text-xs text-blue-700 mt-2">
-                        <span>Model: {editInfo.model_used} ({editInfo.provider_used})</span>
-                        <span>Edited: {editInfo.edited_at ? new Date(editInfo.edited_at).toLocaleTimeString() : ''}</span>
-                      </div>
-                      
-                      {/* Undo Button */}
-                      <div className="mt-3 pt-2 border-t border-blue-200">
-                        <button
-                          onClick={handleUndo}
-                          disabled={isReverting || versionHistory.length < 2 || hasUsedUndo}
-                          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                        >
-                          {isReverting ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Reverting...
-                            </>
-                          ) : hasUsedUndo ? (
-                            "Undo Already Used"
-                          ) : (
-                            <>
-                              Undo Last Edit
-                            </>
-                          )}
-                        </button>
-                        {versionHistory.length < 2 && !hasUsedUndo && (
-                          <p className="text-xs text-blue-600 mt-1 text-center">No previous version available</p>
-                        )}
-                        {hasUsedUndo && (
-                          <p className="text-xs text-blue-600 mt-1 text-center">Make another edit to enable undo</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Version History */}
             <div className="max-w-2xl mx-auto">
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -1009,7 +903,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                                       setMarkdown(cleanMarkdown(data.content))
                                       setActualCurrentVersionId(version.version_id)
                                       toast({ title: `Reverted to version ${version.version_id}` })
-                                      await fetchVersionHistory()
+                                      await fetchVersionHistory(currentPostId)
                                     } catch (e) {
                                       toast({ title: "Failed to revert", variant: "destructive" })
                                     } finally {
