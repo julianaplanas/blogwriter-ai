@@ -81,6 +81,26 @@ export default function AIBlogWriter() {
       .trim()
   }
 
+  // Helper: Insert images into markdown after title and before conclusion
+  const insertImagesIntoMarkdown = (markdown: string, images: Array<{ url: string; alt_text: string }>) => {
+    if (!images || images.length === 0) return markdown;
+    // Find the first heading (title)
+    const lines = markdown.split('\n');
+    let insertIndex = 1;
+    // Insert after the first non-empty line (usually the title)
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() !== '') {
+        insertIndex = i + 1;
+        break;
+      }
+    }
+    // Prepare image markdown
+    const imageMarkdown = images.map(img => `![${img.alt_text || 'Blog image'}](${img.url})`).join('\n\n');
+    // Insert images
+    lines.splice(insertIndex, 0, imageMarkdown);
+    return lines.join('\n');
+  };
+
   // Clear version history when component mounts
   useEffect(() => {
     setVersionHistory([])
@@ -253,7 +273,11 @@ export default function AIBlogWriter() {
       console.log("Backend response:", data) // Debug log
       
       // The backend returns: content, sources, images, metadata
-      const cleanedMarkdown = cleanMarkdown(data.content)
+      const markdownWithImages = insertImagesIntoMarkdown(data.content, (data.images || []).map((image: any) => ({
+        url: image.medium_url || image.url || "",
+        alt_text: image.alt || image.photographer || "Blog image"
+      })));
+      const cleanedMarkdown = cleanMarkdown(markdownWithImages)
       setMarkdown(cleanedMarkdown)
       setCurrentPostId(data.id)
       
@@ -824,32 +848,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
               </div>
             </div>
 
-            {/* Images Section */}
-            {images.length > 0 && (
-              <div className="max-w-2xl mx-auto mt-8">
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Related Images</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {images.map((image, index) => (
-                      <div key={index} className="space-y-2">
-                        <img
-                          src={image.url}
-                          alt={image.alt_text}
-                          className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.src = "/placeholder.svg"
-                          }}
-                          loading="lazy"
-                        />
-                        <p className="text-xs text-gray-600 truncate">{image.alt_text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Sources/References Section */}
             {references.length > 0 && (
               <div className="max-w-2xl mx-auto mt-8">
@@ -957,31 +955,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium text-gray-900">Version History</h3>
-                  {versionHistory.length >= 2 && !hasUsedUndo && (
-                    <button
-                      onClick={handleUndo}
-                      disabled={isReverting}
-                      className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
-                    >
-                      {isReverting ? (
-                        <>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Reverting...
-                        </>
-                      ) : (
-                        <>
-                          Undo Last Edit
-                        </>
-                      )}
-                    </button>
-                  )}
-                  {hasUsedUndo && (
-                    <div className="px-3 py-2 text-sm text-gray-400 bg-gray-100 rounded-lg">
-                      Undo Used
-                    </div>
-                  )}
                 </div>
-                
                 {versionHistory.length === 0 ? (
                   <p className="text-gray-500 text-sm text-center py-4">No version history available</p>
                 ) : (
@@ -989,7 +963,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                     {versionHistory.slice().reverse().map((version, index) => {
                       const isCurrentVersion = version.version_id === actualCurrentVersionId
                       return (
-                        <div key={version.version_id} className="p-4 rounded-lg bg-white shadow-sm border">
+                        <div key={version.version_id} className={`p-4 rounded-lg bg-white shadow-sm border ${isCurrentVersion ? 'border-green-500' : ''}`}>
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-2">
@@ -1002,7 +976,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                                   </span>
                                 )}
                               </div>
-                              
                               {version.instruction && version.instruction !== "Initial version - no changes" && (
                                 <div className="mb-3">
                                   <p className="text-sm font-medium text-gray-700 mb-1">Edit Instruction:</p>
@@ -1011,20 +984,44 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                                   </p>
                                 </div>
                               )}
-                              
-                              {(!version.instruction || version.instruction === "Initial version - no changes") && (
+                              {version.diff_summary && (
                                 <div className="mb-3">
-                                  <p className="text-sm font-medium text-gray-500 mb-1">Original Version</p>
-                                  <p className="text-xs text-gray-500">First generated content</p>
+                                  <p className="text-sm font-medium text-blue-700 mb-1">Diff Summary:</p>
+                                  <p className="text-xs text-blue-700 bg-blue-50 p-2 rounded font-mono">{version.diff_summary}</p>
                                 </div>
                               )}
-                              
                               <p className="text-xs text-gray-500">
                                 {version.timestamp ? 
                                   new Date(version.timestamp).toLocaleString() : 
                                   (version.edited_at ? new Date(version.edited_at).toLocaleString() : 'Unknown date')
                                 }
                               </p>
+                            </div>
+                            <div className="ml-4 flex flex-col gap-2">
+                              {!isCurrentVersion && (
+                                <button
+                                  onClick={async () => {
+                                    setIsReverting(true)
+                                    try {
+                                      const response = await fetch(`${API_BASE_URL}/edit/undo/${version.version_id}`, { method: "POST" })
+                                      if (!response.ok) throw new Error("Failed to revert")
+                                      const data = await response.json()
+                                      setMarkdown(cleanMarkdown(data.content))
+                                      setActualCurrentVersionId(version.version_id)
+                                      toast({ title: `Reverted to version ${version.version_id}` })
+                                      await fetchVersionHistory()
+                                    } catch (e) {
+                                      toast({ title: "Failed to revert", variant: "destructive" })
+                                    } finally {
+                                      setIsReverting(false)
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                  disabled={isReverting}
+                                >
+                                  {isReverting ? 'Reverting...' : 'Revert to this version'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
