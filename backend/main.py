@@ -12,7 +12,7 @@ import json
 import requests
 import threading
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List, List
 from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -105,6 +105,131 @@ def generate_with_groq_api(topic: str, api_key: str) -> str:
     result = response.json()
     return result["choices"][0]["message"]["content"]
 
+def search_with_brave_api(query: str, api_key: str, count: int = 5) -> List[Dict[str, Any]]:
+    """Search for recent articles using Brave Search API."""
+    url = "https://api.search.brave.com/res/v1/web/search"
+    
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": api_key
+    }
+    
+    params = {
+        "q": query,
+        "count": count,
+        "search_lang": "en",
+        "country": "US",
+        "safesearch": "moderate",
+        "freshness": "pw"  # Past week
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        result = response.json()
+        articles = []
+        
+        if "web" in result and "results" in result["web"]:
+            for item in result["web"]["results"]:
+                articles.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "description": item.get("description", ""),
+                    "age": item.get("age", "")
+                })
+        
+        return articles
+    except Exception as e:
+        logger.warning(f"Brave Search API failed: {e}")
+        return []
+
+def search_images_with_pexels(query: str, api_key: str, per_page: int = 3) -> List[Dict[str, Any]]:
+    """Search for images using Pexels API."""
+    url = "https://api.pexels.com/v1/search"
+    
+    headers = {
+        "Authorization": api_key
+    }
+    
+    params = {
+        "query": query,
+        "per_page": per_page,
+        "orientation": "landscape"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        result = response.json()
+        images = []
+        
+        if "photos" in result:
+            for photo in result["photos"]:
+                images.append({
+                    "id": photo.get("id"),
+                    "url": photo["src"]["original"],
+                    "medium_url": photo["src"]["medium"],
+                    "photographer": photo.get("photographer", ""),
+                    "alt": photo.get("alt", query)
+                })
+        
+        return images
+    except Exception as e:
+        logger.warning(f"Pexels API failed: {e}")
+        return []
+
+def generate_enhanced_blog_with_research(topic: str, groq_api_key: str, brave_api_key: str = None) -> Dict[str, Any]:
+    """Generate blog content with research and sources."""
+    sources = []
+    
+    # Try to get research data
+    if brave_api_key:
+        logger.info(f"Researching topic: {topic}")
+        sources = search_with_brave_api(topic, brave_api_key)
+    
+    # Create enhanced prompt with research
+    research_context = ""
+    if sources:
+        research_context = "\n\nRecent research sources:\n"
+        for source in sources[:3]:  # Use top 3 sources
+            research_context += f"- {source['title']}: {source['description']}\n"
+    
+    prompt = f"""Write a comprehensive blog post about {topic}.{research_context}
+    
+    Include an introduction, main content with key points, and a conclusion. Make it engaging and informative. 
+    If research sources are provided, incorporate relevant insights naturally into the content."""
+    
+    # Generate content using Groq
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {groq_api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "model": "llama3-70b-8192",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 2500,
+        "temperature": 0.7
+    }
+    
+    response = requests.post(url, headers=headers, json=data, timeout=30)
+    response.raise_for_status()
+    
+    result = response.json()
+    content = result["choices"][0]["message"]["content"]
+    
+    return {
+        "content": content,
+        "sources": sources,
+        "research_enabled": bool(sources)
+    }
+
 def create_app():
     """Create FastAPI app with AI functionality via HTTP requests."""
     # Initialize database
@@ -131,7 +256,14 @@ def create_app():
             "message": "AI Blog Writer API", 
             "status": "running",
             "version": "1.1.0",
-            "features": ["AI blog generation", "database storage", "direct API calls"]
+            "features": [
+                "AI blog generation", 
+                "database storage", 
+                "direct API calls",
+                "research integration",
+                "image search",
+                "enhanced blog generation"
+            ]
         }
     
     @app.get("/health")
@@ -383,6 +515,137 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             raise
         except Exception as e:
             logger.error(f"Error getting post: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.post("/research")
+    def research_topic(request: Dict[str, Any]):
+        """Research a topic using Brave Search API."""
+        topic = request.get("topic", "")
+        if not topic:
+            raise HTTPException(status_code=400, detail="Topic is required")
+        
+        try:
+            brave_api_key = os.getenv("BRAVE_API_KEY")
+            if not brave_api_key:
+                return {"error": "Brave API key not configured", "sources": []}
+            
+            sources = search_with_brave_api(topic, brave_api_key)
+            
+            return {
+                "topic": topic,
+                "sources": sources,
+                "count": len(sources),
+                "status": "success"
+            }
+            
+        except Exception as e:
+            logger.error(f"Research failed: {e}")
+            return {"error": str(e), "sources": []}
+    
+    @app.post("/images")
+    def search_images(request: Dict[str, Any]):
+        """Search for images using Pexels API."""
+        query = request.get("query", "")
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        try:
+            pexels_api_key = os.getenv("PEXELS_API_KEY")
+            if not pexels_api_key:
+                return {"error": "Pexels API key not configured", "images": []}
+            
+            images = search_images_with_pexels(query, pexels_api_key)
+            
+            return {
+                "query": query,
+                "images": images,
+                "count": len(images),
+                "status": "success"
+            }
+            
+        except Exception as e:
+            logger.error(f"Image search failed: {e}")
+            return {"error": str(e), "images": []}
+    
+    @app.post("/generate-enhanced")
+    def generate_enhanced_blog_post(request: Dict[str, Any]):
+        """Generate a blog post with research and images."""
+        topic = request.get("topic", "Technology Trends")
+        
+        try:
+            groq_api_key = os.getenv("GROQ_API_KEY")
+            brave_api_key = os.getenv("BRAVE_API_KEY")
+            pexels_api_key = os.getenv("PEXELS_API_KEY")
+            
+            if not groq_api_key:
+                raise ValueError("GROQ_API_KEY not set")
+            
+            logger.info(f"Generating enhanced blog post about: {topic}")
+            
+            # Generate content with research
+            result = generate_enhanced_blog_with_research(topic, groq_api_key, brave_api_key)
+            content = result["content"]
+            sources = result["sources"]
+            
+            # Search for images
+            images = []
+            if pexels_api_key:
+                images = search_images_with_pexels(topic, pexels_api_key)
+            
+            word_count = len(content.split())
+            post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            
+            # Save to database with enhanced metadata
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO blog_posts (id, topic, content, word_count, sources, images, provider, model, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    post_id,
+                    topic,
+                    content,
+                    word_count,
+                    json.dumps(sources),  # Store research sources
+                    json.dumps(images),   # Store image data
+                    "groq-enhanced",      # provider
+                    "llama3-70b-8192",   # model
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat(),
+                    json.dumps({
+                        "provider": "groq-enhanced",
+                        "model": "llama3-70b-8192",
+                        "research_enabled": bool(sources),
+                        "images_enabled": bool(images),
+                        "source_count": len(sources),
+                        "image_count": len(images)
+                    })
+                ))
+                
+                conn.commit()
+            
+            logger.info(f"Successfully generated enhanced blog post: {post_id}")
+            
+            return {
+                "id": post_id,
+                "topic": topic,
+                "content": content,
+                "word_count": word_count,
+                "sources": sources,
+                "images": images,
+                "status": "success",
+                "metadata": {
+                    "provider": "groq-enhanced",
+                    "model": "llama3-70b-8192",
+                    "research_enabled": bool(sources),
+                    "images_enabled": bool(images),
+                    "created_at": datetime.now().isoformat()
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Enhanced generation failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
     return app
