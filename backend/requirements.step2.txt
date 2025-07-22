@@ -1,0 +1,16 @@
+# Step-by-step requirements to avoid Rust dependencies
+# Start with working base from requirements.test.txt
+
+# Core (known to work)
+fastapi==0.68.0
+uvicorn==0.15.0
+requests
+
+# Add our needed packages one by one
+python-dotenv==1.0.0
+
+# Database - use built-in sqlite3 instead of aiosqlite
+# We'll modify the code to use sqlite3 instead
+
+# Skip groq for now - it requires modern pydantic which needs Rust
+# We'll add it back once the basic app is working

@@ -1,8 +1,8 @@
-# Ultra-minimal requirements avoiding Rust dependencies
-# Use Pydantic v1 to avoid Rust compilation
+# Ultra-minimal requirements with compatible versions
+# Use FastAPI that's compatible with Pydantic v1
 
-fastapi==0.68.0
-uvicorn==0.15.0
+fastapi==0.100.1
+uvicorn==0.23.0
 pydantic==1.10.13
 requests==2.31.0
 python-dotenv==1.0.0
