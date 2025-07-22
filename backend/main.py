@@ -662,19 +662,17 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             if not groq_api_key:
                 raise ValueError("GROQ_API_KEY not set")
             
-            logger.info(f"Editing blog post with instruction: {instruction}")
-            
             # Create edit prompt
-            edit_prompt = f"""You are an expert blog editor. Please edit the following blog post according to the instruction provided.
+            prompt = f"""Please edit the following content according to the instruction provided.
 
-Original blog post:
+Original content:
 {content}
 
-Edit instruction: {instruction}
+Instruction: {instruction}
 
-Please return only the edited blog post content, maintaining the same format and style. Do not add any explanations or comments."""
+Please provide the edited content while maintaining the same style and format. Only make changes that align with the instruction."""
             
-            # Generate edited content using Groq
+            # Call Groq API
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {
                 "Authorization": f"Bearer {groq_api_key}",
@@ -684,10 +682,10 @@ Please return only the edited blog post content, maintaining the same format and
             data = {
                 "model": "llama3-70b-8192",
                 "messages": [
-                    {"role": "user", "content": edit_prompt}
+                    {"role": "user", "content": prompt}
                 ],
                 "max_tokens": 2500,
-                "temperature": 0.3
+                "temperature": 0.7
             }
             
             response = requests.post(url, headers=headers, json=data, timeout=30)
@@ -696,12 +694,50 @@ Please return only the edited blog post content, maintaining the same format and
             result = response.json()
             edited_content = result["choices"][0]["message"]["content"]
             
+            # Store version in database (simple version tracking)
+            version_id = f"v_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Create versions table if it doesn't exist
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS versions (
+                        id TEXT PRIMARY KEY,
+                        post_id TEXT,
+                        content TEXT NOT NULL,
+                        instruction TEXT,
+                        created_at TEXT,
+                        version_number INTEGER
+                    )
+                ''')
+                
+                # Get current version number
+                cursor.execute('SELECT MAX(version_number) FROM versions WHERE post_id = ?', (request.get("post_id", "current"),))
+                max_version = cursor.fetchone()[0] or 0
+                
+                # Store new version
+                cursor.execute('''
+                    INSERT INTO versions (id, post_id, content, instruction, created_at, version_number)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    version_id,
+                    request.get("post_id", "current"),
+                    edited_content,
+                    instruction,
+                    datetime.now().isoformat(),
+                    max_version + 1
+                ))
+                
+                conn.commit()
+            
             return {
                 "content": edited_content,
                 "instruction_applied": instruction,
                 "model_used": "llama3-70b-8192",
                 "provider_used": "groq-direct",
                 "edited_at": datetime.now().isoformat(),
+                "version_id": version_id,
                 "status": "success"
             }
             
@@ -709,33 +745,91 @@ Please return only the edited blog post content, maintaining the same format and
             logger.error(f"Edit failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
+    @app.get("/edit/history/{post_id}")
+    def get_version_history(post_id: str = "current"):
+        """Get version history for a post."""
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT id, content, instruction, created_at, version_number
+                    FROM versions 
+                    WHERE post_id = ?
+                    ORDER BY version_number DESC
+                    LIMIT 10
+                ''', (post_id,))
+                
+                versions = []
+                for row in cursor.fetchall():
+                    versions.append({
+                        "version_id": row[0],
+                        "content": row[1],
+                        "instruction": row[2],
+                        "timestamp": row[3],
+                        "version_number": row[4]
+                    })
+                
+                # Get current version (latest)
+                current_version = versions[0]["version_id"] if versions else None
+                
+                return {
+                    "versions": versions,
+                    "current_version": current_version,
+                    "count": len(versions)
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get version history: {e}")
+            return {"versions": [], "current_version": None, "count": 0}
+    
+    @app.post("/edit/undo/{version_id}")
+    def undo_to_version(version_id: str):
+        """Revert to a specific version."""
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get the version content
+                cursor.execute('''
+                    SELECT content, instruction, post_id, version_number
+                    FROM versions 
+                    WHERE id = ?
+                ''', (version_id,))
+                
+                row = cursor.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Version not found")
+                
+                content, instruction, post_id, version_number = row
+                
+                return {
+                    "markdown": content,
+                    "version_restored": version_id,
+                    "instruction": instruction,
+                    "version_number": version_number,
+                    "status": "success"
+                }
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Undo failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.delete("/edit/history/{post_id}")
+    def clear_version_history(post_id: str = "current"):
+        """Clear version history for a post."""
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM versions WHERE post_id = ?', (post_id,))
+                conn.commit()
+                
+            return {"status": "success", "message": "Version history cleared"}
+            
+        except Exception as e:
+            logger.error(f"Failed to clear version history: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     return app
-
-def main():
-    """Start the FastAPI application."""
-    logger.info("Starting AI Blog Writer Backend (Direct API mode)...")
-    
-    # Get port
-    port = int(os.environ.get('PORT', 8000))
-    logger.info(f"Port: {port}")
-    
-    # Create app
-    app = create_app()
-    logger.info("FastAPI app with direct API integration created successfully")
-    
-    # Start server
-    import uvicorn
-    logger.info(f"Starting server on 0.0.0.0:{port}")
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        log_level="info"
-    )
-
-# Create app instance at module level for uvicorn compatibility
-app = create_app()
-
-if __name__ == "__main__":
-    main()
