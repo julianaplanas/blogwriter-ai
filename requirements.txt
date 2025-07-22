@@ -1,0 +1,9 @@
+requests>=2.31.0
+python-dotenv>=1.0.0
+fastapi>=0.104.1
+uvicorn>=0.24.0
+pydantic>=2.5.0
+# sqlite3 is built into Python, no need to install
+
+# LLM providers
+groq>=0.4.1
