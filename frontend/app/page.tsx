@@ -6,7 +6,7 @@ import { Loader2, Copy, Download } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 
 // API Base URL - use environment variable in production, fallback to localhost for development
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
 
 interface BlogMetadata {
   word_count: number
