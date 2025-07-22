@@ -15,7 +15,7 @@ interface BlogMetadata {
 }
 
 interface SavedPost {
-  id: number
+  id: string
   topic: string
   word_count: number
   sources_count: number
@@ -93,10 +93,23 @@ export default function AIBlogWriter() {
   const fetchSavedPosts = async () => {
     setLoadingSavedPosts(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/posts?limit=20`)
+      const response = await fetch(`${API_BASE_URL}/posts`)
       if (!response.ok) throw new Error("Failed to fetch saved posts")
       
-      const posts = await response.json()
+      const data = await response.json()
+      console.log("Posts data:", data) // Debug log
+      
+      // Backend returns: {posts: [...], count: number, status: string}
+      const posts = (data.posts || []).map((post: any) => ({
+        id: post.id,
+        topic: post.topic,
+        word_count: post.word_count || 0,
+        sources_count: 0, // Backend doesn't track this separately yet
+        images_count: 0,  // Backend doesn't track this separately yet
+        created_at: post.created_at,
+        updated_at: post.created_at // Use created_at as fallback
+      }))
+      
       setSavedPosts(posts)
     } catch (error) {
       console.error("Error fetching saved posts:", error)
@@ -110,25 +123,51 @@ export default function AIBlogWriter() {
   }
 
   // Function to load a saved blog post
-  const loadSavedPost = async (postId: number) => {
+  const loadSavedPost = async (postId: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/post/${postId}`)
       if (!response.ok) throw new Error("Failed to load blog post")
       
       const post = await response.json()
+      console.log("Loaded post:", post) // Debug log
       
-      // Set the blog content
+      // Set the blog content - backend returns: id, topic, content, word_count, created_at, metadata
       setTopic(post.topic)
       setMarkdown(post.content)
-      setReferences(post.references || [])
-      setImages(post.images || [])
-      setCurrentPostId(postId.toString())
+      setCurrentPostId(postId)
+      
+      // Try to extract sources and images from metadata if available
+      let sources = []
+      let images = []
+      
+      if (post.metadata) {
+        try {
+          const metadata = typeof post.metadata === 'string' ? JSON.parse(post.metadata) : post.metadata
+          if (metadata.sources) {
+            sources = metadata.sources.map((source: any) => ({
+              title: source.title || "Untitled",
+              url: source.url || "#"
+            }))
+          }
+          if (metadata.images) {
+            images = metadata.images.map((image: any) => ({
+              url: image.medium_url || image.url || "",
+              alt_text: image.alt || image.photographer || "Blog image"
+            }))
+          }
+        } catch (e) {
+          console.error("Error parsing metadata:", e)
+        }
+      }
+      
+      setReferences(sources)
+      setImages(images)
       
       // Set metadata
       setMetadata({
         word_count: post.word_count || post.content.split(/\s+/).length,
-        sources_count: post.references?.length || 0,
-        images_count: post.images?.length || 0
+        sources_count: sources.length,
+        images_count: images.length
       })
       
       // Clear edit info
@@ -153,8 +192,8 @@ export default function AIBlogWriter() {
     }
   }
 
-  // Function to delete a saved blog post
-  const deleteSavedPost = async (postId: number, postTopic: string) => {
+  // Function to delete a saved blog post  
+  const deleteSavedPost = async (postId: string, postTopic: string) => {
     if (!confirm(`Are you sure you want to delete "${postTopic}"?`)) return
     
     try {
@@ -195,15 +234,14 @@ export default function AIBlogWriter() {
     await clearVersionHistory()
     
     try {
-      const response = await fetch(`${API_BASE_URL}/generate`, {
+      // Use the enhanced endpoint that includes research and images
+      const response = await fetch(`${API_BASE_URL}/generate-enhanced`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           topic: topic,
-          include_images: true,
-          research_count: 5,
         }),
       })
 
@@ -211,21 +249,36 @@ export default function AIBlogWriter() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const data: BlogResponse = await response.json()
-      const cleanedMarkdown = cleanMarkdown(data.markdown)
+      const data = await response.json()
+      console.log("Backend response:", data) // Debug log
+      
+      // The backend returns: content, sources, images, metadata
+      const cleanedMarkdown = cleanMarkdown(data.content)
       setMarkdown(cleanedMarkdown)
-      setReferences(data.references || [])
-      setImages(data.images || [])
       setCurrentPostId(data.id)
       
-      // Update metadata with actual sources count from references
-      const actualSourcesCount = data.references ? data.references.length : 0
+      // Handle sources (research results)
+      const references = (data.sources || []).map((source: any) => ({
+        title: source.title || "Untitled",
+        url: source.url || "#"
+      }))
+      setReferences(references)
+      
+      // Handle images
+      const formattedImages = (data.images || []).map((image: any) => ({
+        url: image.medium_url || image.url || "",
+        alt_text: image.alt || image.photographer || "Blog image"
+      }))
+      setImages(formattedImages)
+      
+      // Set metadata
       setMetadata({
-        ...data.metadata,
-        sources_count: actualSourcesCount
+        word_count: data.word_count || data.content.split(/\s+/).length,
+        sources_count: references.length,
+        images_count: formattedImages.length
       })
 
-      // Create initial version in backend by doing a "no-op" edit
+      // Create initial version in backend by tracking this as first version
       try {
         await fetch(`${API_BASE_URL}/edit`, {
           method: "POST",
@@ -233,10 +286,8 @@ export default function AIBlogWriter() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            markdown: cleanedMarkdown,
+            content: cleanedMarkdown,
             instruction: "Initial version - no changes",
-            export_diff: false,
-            track_version: true,
           }),
         })
         
@@ -252,7 +303,7 @@ export default function AIBlogWriter() {
       setHasUsedUndo(false) // Reset undo state for new post
 
       toast({
-        title: `Generated ${data.metadata.word_count} words with ${actualSourcesCount} sources`,
+        title: `Generated ${data.word_count} words with ${references.length} sources and ${formattedImages.length} images`,
       })
     } catch (error) {
       console.error("Generation error:", error)
@@ -321,6 +372,8 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
   }
 
   const handleEdit = async () => {
+    console.log("Edit button clicked!", { editInstruction, isEditing }); // Debug log
+    
     if (!editInstruction.trim() || editInstruction.length < 5) {
       toast({
         title: "Please provide editing instructions with at least 5 characters",
@@ -331,78 +384,66 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
 
     setIsEditing(true)
     try {
+      console.log("Sending edit request to:", `${API_BASE_URL}/edit`); // Debug log
+      
       const response = await fetch(`${API_BASE_URL}/edit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          markdown: markdown,
+          content: markdown,
           instruction: editInstruction,
-          export_diff: true, // Request diff information
-          track_version: true, // Enable version tracking
         }),
       })
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Edit failed:", response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log("Edit response:", data) // Debug log
       
       // Update markdown content and clean it
-      const cleanedMarkdown = cleanMarkdown(data.markdown)
+      const cleanedMarkdown = cleanMarkdown(data.content)
       setMarkdown(cleanedMarkdown)
       setEditInstruction("")
       
       // Store detailed edit information
       setEditInfo({
-        changes_summary: data.changes_summary,
-        diff_text: data.diff_text,
+        changes_summary: `Edited with instruction: "${data.instruction_applied}"`,
         model_used: data.model_used,
         provider_used: data.provider_used,
         edited_at: data.edited_at,
         instruction_applied: data.instruction_applied
       })
       
-      // Update word count from the API response (more accurate)
-      if (metadata && data.changes_summary) {
-        // Extract word count from changes summary
-        const wordCountMatch = data.changes_summary.match(/\((\d+) → (\d+)\)/)
-        if (wordCountMatch) {
-          const newWordCount = parseInt(wordCountMatch[2])
-          setMetadata({
-            ...metadata,
-            word_count: newWordCount
-          })
-        }
+      // Update word count
+      if (metadata) {
+        const newWordCount = data.content.split(/\s+/).length
+        setMetadata({
+          ...metadata,
+          word_count: newWordCount
+        })
       }
 
-      // Show success message with edit details
-      const changeLines = data.changes_summary?.match(/Lines added: (\d+), Lines removed: (\d+)/);
-      const changeInfo = changeLines ? 
-        `${changeLines[1]} lines added, ${changeLines[2]} lines removed` : 
-        "Content updated successfully";
-
       toast({
-        title: "Edit applied successfully! ✨",
-        description: changeInfo,
+        title: "Blog post edited successfully",
+        description: `Applied: ${data.instruction_applied}`
       })
-      
-      // Auto-show edit details for a few seconds
-      setShowEditDetails(true)
-      setTimeout(() => setShowEditDetails(false), 5000)
-      
-      // Reset undo state since we made a new edit
-      setHasUsedUndo(false)
-      
-      // Fetch updated version history
-      await fetchVersionHistory()
+
+      // Refresh version history after successful edit
+      setTimeout(async () => {
+        await fetchVersionHistory()
+      }, 100)
       
     } catch (error) {
       console.error("Edit error:", error)
       toast({
-        title: "Unable to apply edits. Please try again.",
+        title: "Failed to edit blog post",
+        description: "Please check your connection and try again.",
         variant: "destructive",
       })
     } finally {
@@ -516,14 +557,14 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
       const data = await response.json()
       console.log("Undo API response:", {
         version_restored: data.version_restored,
-        content_length: data.markdown?.length,
-        first_100_chars: data.markdown?.substring(0, 100)
+        content_length: data.content?.length,
+        first_100_chars: data.content?.substring(0, 100)
       })
       
       // Store current markdown for comparison
       const beforeMarkdown = markdown
       
-      const cleanedMarkdown = cleanMarkdown(data.markdown)
+      const cleanedMarkdown = cleanMarkdown(data.content)
       console.log("Before setMarkdown - current:", beforeMarkdown.substring(0, 100))
       console.log("Before setMarkdown - new:", cleanedMarkdown.substring(0, 100))
       
@@ -552,7 +593,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
         description: `Restored version: ${data.version_restored || previousVersion.version_id}`,
       })
 
-      // Refresh version history last to avoid overwrites
+      // Refresh version history
       setTimeout(async () => {
         await fetchVersionHistory()
         console.log("Version history refreshed")
@@ -782,6 +823,56 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                 </ReactMarkdown>
               </div>
             </div>
+
+            {/* Images Section */}
+            {images.length > 0 && (
+              <div className="max-w-2xl mx-auto mt-8">
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="font-medium text-gray-900 mb-4">Related Images</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {images.map((image, index) => (
+                      <div key={index} className="space-y-2">
+                        <img
+                          src={image.url}
+                          alt={image.alt_text}
+                          className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement
+                            target.src = "/placeholder.svg"
+                          }}
+                          loading="lazy"
+                        />
+                        <p className="text-xs text-gray-600 truncate">{image.alt_text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sources/References Section */}
+            {references.length > 0 && (
+              <div className="max-w-2xl mx-auto mt-8">
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="font-medium text-gray-900 mb-4">Sources & References</h3>
+                  <div className="space-y-3">
+                    {references.map((ref, index) => (
+                      <div key={index} className="border-l-4 border-blue-500 pl-4">
+                        <a
+                          href={ref.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 font-medium text-sm block"
+                        >
+                          {ref.title}
+                        </a>
+                        <p className="text-xs text-gray-500 mt-1 truncate">{ref.url}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Enhanced Edit Details */}
             {editInfo && (
