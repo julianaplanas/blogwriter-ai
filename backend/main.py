@@ -10,8 +10,12 @@ import logging
 import sqlite3
 import json
 import requests
+import threading
 from datetime import datetime
 from typing import Dict, Any
+from contextlib import contextmanager
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -21,41 +25,59 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Simple database setup
+# Database lock for thread safety
+db_lock = threading.Lock()
+
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections to prevent locking issues."""
+    with db_lock:
+        conn = None
+        try:
+            # Set connection timeout and enable WAL mode for better concurrency
+            conn = sqlite3.connect('blog_posts.db', timeout=30.0)
+            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute('PRAGMA synchronous=NORMAL')
+            conn.execute('PRAGMA temp_store=memory')
+            conn.execute('PRAGMA mmap_size=268435456')  # 256MB
+            yield conn
+        finally:
+            if conn:
+                conn.close()
+
 def init_database():
     """Initialize simple SQLite database with proper schema migration."""
-    conn = sqlite3.connect('blog_posts.db')
-    cursor = conn.cursor()
-    
-    # Create table with all columns
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS blog_posts (
-            id TEXT PRIMARY KEY,
-            topic TEXT NOT NULL,
-            content TEXT NOT NULL,
-            word_count INTEGER,
-            created_at TEXT,
-            metadata TEXT
-        )
-    ''')
-    
-    # Check if metadata column exists and add it if missing
-    cursor.execute("PRAGMA table_info(blog_posts)")
-    columns = [row[1] for row in cursor.fetchall()]
-    
-    if 'metadata' not in columns:
-        logger.info("Adding metadata column to existing table")
-        cursor.execute('ALTER TABLE blog_posts ADD COLUMN metadata TEXT')
-        # Update existing rows with default metadata
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Create table with all columns
         cursor.execute('''
-            UPDATE blog_posts 
-            SET metadata = '{"provider": "legacy", "model": "unknown"}' 
-            WHERE metadata IS NULL
+            CREATE TABLE IF NOT EXISTS blog_posts (
+                id TEXT PRIMARY KEY,
+                topic TEXT NOT NULL,
+                content TEXT NOT NULL,
+                word_count INTEGER,
+                created_at TEXT,
+                metadata TEXT
+            )
         ''')
-    
-    conn.commit()
-    conn.close()
-    logger.info("Database initialized with proper schema")
+        
+        # Check if metadata column exists and add it if missing
+        cursor.execute("PRAGMA table_info(blog_posts)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        if 'metadata' not in columns:
+            logger.info("Adding metadata column to existing table")
+            cursor.execute('ALTER TABLE blog_posts ADD COLUMN metadata TEXT')
+            # Update existing rows with default metadata
+            cursor.execute('''
+                UPDATE blog_posts 
+                SET metadata = '{"provider": "legacy", "model": "unknown"}' 
+                WHERE metadata IS NULL
+            ''')
+        
+        conn.commit()
+        logger.info("Database initialized with proper schema")
 
 def generate_with_groq_api(topic: str, api_key: str) -> str:
     """Generate blog content using direct Groq API calls."""
@@ -85,9 +107,6 @@ def generate_with_groq_api(topic: str, api_key: str) -> str:
 
 def create_app():
     """Create FastAPI app with AI functionality via HTTP requests."""
-    from fastapi import FastAPI, HTTPException
-    from fastapi.middleware.cors import CORSMiddleware
-    
     # Initialize database
     init_database()
     
@@ -150,23 +169,27 @@ def create_app():
             # Save to database
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
-            conn = sqlite3.connect('blog_posts.db')
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                post_id,
-                topic,
-                content,
-                word_count,
-                datetime.now().isoformat(),
-                json.dumps({"provider": "groq-direct", "model": "llama3-70b-8192"})
-            ))
-            
-            conn.commit()
-            conn.close()
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO blog_posts (id, topic, content, word_count, sources, images, provider, model, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    post_id,
+                    topic,
+                    content,
+                    word_count,
+                    "",  # sources
+                    "",  # images
+                    "groq-direct",  # provider
+                    "llama3-70b-8192",  # model
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat(),  # updated_at
+                    json.dumps({"provider": "groq-direct", "model": "llama3-70b-8192"})
+                ))
+                
+                conn.commit()
             
             logger.info(f"Successfully generated blog post: {post_id}")
             
@@ -246,23 +269,27 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
             # Save to database
-            conn = sqlite3.connect('blog_posts.db')
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                post_id,
-                topic,
-                content,
-                word_count,
-                datetime.now().isoformat(),
-                json.dumps({"provider": "fallback", "model": "template"})
-            ))
-            
-            conn.commit()
-            conn.close()
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO blog_posts (id, topic, content, word_count, sources, images, provider, model, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    post_id,
+                    topic,
+                    content,
+                    word_count,
+                    "",  # sources
+                    "",  # images  
+                    "fallback",  # provider
+                    "template",  # model
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat(),  # updated_at
+                    json.dumps({"provider": "fallback", "model": "template"})
+                ))
+                
+                conn.commit()
             
             return {
                 "id": post_id,
@@ -281,40 +308,38 @@ The key to success lies in careful planning, thoughtful implementation, and cont
     def list_posts():
         """List all blog posts."""
         try:
-            conn = sqlite3.connect('blog_posts.db')
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT id, topic, word_count, created_at, metadata
-                FROM blog_posts
-                ORDER BY created_at DESC
-                LIMIT 20
-            ''')
-            
-            posts = []
-            for row in cursor.fetchall():
-                metadata = {}
-                try:
-                    if row[4]:  # metadata column
-                        metadata = json.loads(row[4])
-                except (json.JSONDecodeError, TypeError):
-                    metadata = {"provider": "legacy", "model": "unknown"}
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
                 
-                posts.append({
-                    "id": row[0],
-                    "topic": row[1],
-                    "word_count": row[2],
-                    "created_at": row[3],
-                    "metadata": metadata
-                })
-            
-            conn.close()
-            
-            return {
-                "posts": posts,
-                "count": len(posts),
-                "status": "success"
-            }
+                cursor.execute('''
+                    SELECT id, topic, word_count, created_at, metadata
+                    FROM blog_posts
+                    ORDER BY created_at DESC
+                    LIMIT 20
+                ''')
+                
+                posts = []
+                for row in cursor.fetchall():
+                    metadata = {}
+                    try:
+                        if row[4]:  # metadata column
+                            metadata = json.loads(row[4])
+                    except (json.JSONDecodeError, TypeError):
+                        metadata = {"provider": "legacy", "model": "unknown"}
+                    
+                    posts.append({
+                        "id": row[0],
+                        "topic": row[1],
+                        "word_count": row[2],
+                        "created_at": row[3],
+                        "metadata": metadata
+                    })
+                
+                return {
+                    "posts": posts,
+                    "count": len(posts),
+                    "status": "success"
+                }
             
         except Exception as e:
             logger.error(f"Error listing posts: {e}")
@@ -324,36 +349,35 @@ The key to success lies in careful planning, thoughtful implementation, and cont
     def get_post(post_id: str):
         """Get a specific blog post."""
         try:
-            conn = sqlite3.connect('blog_posts.db')
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT id, topic, content, word_count, created_at, metadata
-                FROM blog_posts
-                WHERE id = ?
-            ''', (post_id,))
-            
-            row = cursor.fetchone()
-            conn.close()
-            
-            if not row:
-                raise HTTPException(status_code=404, detail="Post not found")
-            
-            metadata = {}
-            try:
-                if row[5]:  # metadata column
-                    metadata = json.loads(row[5])
-            except (json.JSONDecodeError, TypeError):
-                metadata = {"provider": "legacy", "model": "unknown"}
-            
-            return {
-                "id": row[0],
-                "topic": row[1],
-                "content": row[2],
-                "word_count": row[3],
-                "created_at": row[4],
-                "metadata": metadata
-            }
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT id, topic, content, word_count, created_at, metadata
+                    FROM blog_posts
+                    WHERE id = ?
+                ''', (post_id,))
+                
+                row = cursor.fetchone()
+                
+                if not row:
+                    raise HTTPException(status_code=404, detail="Post not found")
+                
+                metadata = {}
+                try:
+                    if row[5]:  # metadata column
+                        metadata = json.loads(row[5])
+                except (json.JSONDecodeError, TypeError):
+                    metadata = {"provider": "legacy", "model": "unknown"}
+                
+                return {
+                    "id": row[0],
+                    "topic": row[1],
+                    "content": row[2],
+                    "word_count": row[3],
+                    "created_at": row[4],
+                    "metadata": metadata
+                }
             
         except HTTPException:
             raise
@@ -385,6 +409,9 @@ def main():
         port=port,
         log_level="info"
     )
+
+# Create app instance at module level for uvicorn compatibility
+app = create_app()
 
 if __name__ == "__main__":
     main()
