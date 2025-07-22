@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: ai-blog-writer-backend
+    runtime: python
+    region: oregon  # Change to your preferred region
+    rootDir: backend
+    plan: free  # Change to starter or pro as needed
+    buildCommand: pip install -r requirements.txt
+    startCommand: python start_production.py
+    envVars:
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: HOST
+        value: "0.0.0.0"
+      - key: PORT
+        value: "8000"
+      - key: LOG_LEVEL
+        value: "info"
+    healthCheckPath: /health
+
+  - type: web
+    name: ai-blog-writer-frontend
+    runtime: node
+    region: oregon  # Change to your preferred region
+    rootDir: frontend
+    plan: free  # Change to starter or pro as needed
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://ai-blog-writer-backend.onrender.com  # Update with your backend URL
