@@ -98,6 +98,14 @@ def init_database():
                 WHERE metadata IS NULL
             ''')
         
+        # Add current_version_id column if missing
+        cursor.execute("PRAGMA table_info(blog_posts)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'current_version_id' not in columns:
+            logger.info("Adding current_version_id column to blog_posts table")
+            cursor.execute('ALTER TABLE blog_posts ADD COLUMN current_version_id TEXT')
+            cursor.execute('UPDATE blog_posts SET current_version_id = NULL')
+        
         conn.commit()
         logger.info("Database initialized with proper schema")
 
@@ -770,8 +778,10 @@ Please provide the edited content while maintaining the same style and format. O
                         "version_number": row[4]
                     })
                 
-                # Get current version (latest)
-                current_version = versions[0]["version_id"] if versions else None
+                # Get current version from blog_posts
+                cursor.execute('SELECT current_version_id FROM blog_posts WHERE id = ?', (post_id,))
+                row = cursor.fetchone()
+                current_version = row[0] if row and row[0] else (versions[0]["version_id"] if versions else None)
                 
                 return {
                     "versions": versions,
@@ -802,6 +812,10 @@ Please provide the edited content while maintaining the same style and format. O
                     raise HTTPException(status_code=404, detail="Version not found")
                 
                 content, instruction, post_id, version_number = row
+                
+                # Set this version as current in blog_posts
+                cursor.execute('UPDATE blog_posts SET current_version_id = ? WHERE id = ?', (version_id, post_id))
+                conn.commit()
                 
                 return {
                     "markdown": content,
