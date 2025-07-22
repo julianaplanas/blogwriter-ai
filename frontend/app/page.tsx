@@ -902,6 +902,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                                       const data = await response.json()
                                       setMarkdown(cleanMarkdown(data.markdown))
                                       setActualCurrentVersionId(version.version_id)
+                                      setCurrentVersionId(version.version_id)
                                       toast({ title: `Reverted to version ${version.version_id}` })
                                       await fetchVersionHistory(currentPostId)
                                     } catch (e) {
