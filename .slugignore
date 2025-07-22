@@ -1,0 +1,16 @@
+# Heroku .slugignore - exclude files from deployment
+frontend/
+examples/
+tests/
+config/
+results/
+src/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.db
+.env
+.env.example
+Makefile
+setup.py

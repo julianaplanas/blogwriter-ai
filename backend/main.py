@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Render-compatible FastAPI app with AI via direct HTTP requests
+Heroku-compatible FastAPI app with AI via direct HTTP requests
 Avoids groq package by using direct API calls
 """
 
@@ -16,6 +16,14 @@ from typing import Dict, Any, List, List
 from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available, rely on system environment
+    pass
 
 # Configure logging
 logging.basicConfig(
@@ -34,8 +42,10 @@ def get_db_connection():
     with db_lock:
         conn = None
         try:
+            # Use configurable database path for Heroku
+            db_path = os.getenv('DATABASE_PATH', 'blog_posts.db')
             # Set connection timeout and enable WAL mode for better concurrency
-            conn = sqlite3.connect('blog_posts.db', timeout=30.0)
+            conn = sqlite3.connect(db_path, timeout=30.0)
             conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('PRAGMA synchronous=NORMAL')
             conn.execute('PRAGMA temp_store=memory')
@@ -305,19 +315,14 @@ def create_app():
                 cursor = conn.cursor()
                 
                 cursor.execute('''
-                    INSERT INTO blog_posts (id, topic, content, word_count, sources, images, provider, model, created_at, updated_at, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     post_id,
                     topic,
                     content,
                     word_count,
-                    "",  # sources
-                    "",  # images
-                    "groq-direct",  # provider
-                    "llama3-70b-8192",  # model
                     datetime.now().isoformat(),
-                    datetime.now().isoformat(),  # updated_at
                     json.dumps({"provider": "groq-direct", "model": "llama3-70b-8192"})
                 ))
                 
@@ -405,19 +410,14 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                 cursor = conn.cursor()
                 
                 cursor.execute('''
-                    INSERT INTO blog_posts (id, topic, content, word_count, sources, images, provider, model, created_at, updated_at, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     post_id,
                     topic,
                     content,
                     word_count,
-                    "",  # sources
-                    "",  # images  
-                    "fallback",  # provider
-                    "template",  # model
                     datetime.now().isoformat(),
-                    datetime.now().isoformat(),  # updated_at
                     json.dumps({"provider": "fallback", "model": "template"})
                 ))
                 
@@ -599,28 +599,28 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Enhanced metadata includes sources and images info
+                enhanced_metadata = {
+                    "provider": "groq-enhanced",
+                    "model": "llama3-70b-8192",
+                    "research_enabled": bool(sources),
+                    "images_enabled": bool(images),
+                    "source_count": len(sources),
+                    "image_count": len(images),
+                    "sources": sources[:3],  # Store top 3 sources in metadata
+                    "images": images[:3]     # Store top 3 images in metadata
+                }
+                
                 cursor.execute('''
-                    INSERT INTO blog_posts (id, topic, content, word_count, sources, images, provider, model, created_at, updated_at, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     post_id,
                     topic,
                     content,
                     word_count,
-                    json.dumps(sources),  # Store research sources
-                    json.dumps(images),   # Store image data
-                    "groq-enhanced",      # provider
-                    "llama3-70b-8192",   # model
                     datetime.now().isoformat(),
-                    datetime.now().isoformat(),
-                    json.dumps({
-                        "provider": "groq-enhanced",
-                        "model": "llama3-70b-8192",
-                        "research_enabled": bool(sources),
-                        "images_enabled": bool(images),
-                        "source_count": len(sources),
-                        "image_count": len(images)
-                    })
+                    json.dumps(enhanced_metadata)
                 ))
                 
                 conn.commit()
