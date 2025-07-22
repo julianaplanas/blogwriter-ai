@@ -60,7 +60,7 @@ def init_database():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         
-        # Create table with all columns
+        # Create main blog_posts table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS blog_posts (
                 id TEXT PRIMARY KEY,
@@ -69,6 +69,18 @@ def init_database():
                 word_count INTEGER,
                 created_at TEXT,
                 metadata TEXT
+            )
+        ''')
+        
+        # Create versions table for edit history
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS versions (
+                id TEXT PRIMARY KEY,
+                post_id TEXT,
+                content TEXT NOT NULL,
+                instruction TEXT,
+                created_at TEXT,
+                version_number INTEGER
             )
         ''')
         
@@ -700,18 +712,6 @@ Please provide the edited content while maintaining the same style and format. O
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Create versions table if it doesn't exist
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS versions (
-                        id TEXT PRIMARY KEY,
-                        post_id TEXT,
-                        content TEXT NOT NULL,
-                        instruction TEXT,
-                        created_at TEXT,
-                        version_number INTEGER
-                    )
-                ''')
-                
                 # Get current version number
                 cursor.execute('SELECT MAX(version_number) FROM versions WHERE post_id = ?', (request.get("post_id", "current"),))
                 max_version = cursor.fetchone()[0] or 0
@@ -833,3 +833,32 @@ Please provide the edited content while maintaining the same style and format. O
             raise HTTPException(status_code=500, detail=str(e))
 
     return app
+
+def main():
+    """Start the FastAPI application."""
+    logger.info("Starting AI Blog Writer Backend (Direct API mode)...")
+    
+    # Get port
+    port = int(os.environ.get('PORT', 8000))
+    logger.info(f"Port: {port}")
+    
+    # Create app
+    app = create_app()
+    logger.info("FastAPI app with direct API integration created successfully")
+    
+    # Start server
+    import uvicorn
+    logger.info(f"Starting server on 0.0.0.0:{port}")
+    
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info"
+    )
+
+# Create app instance at module level for uvicorn compatibility
+app = create_app()
+
+if __name__ == "__main__":
+    main()
