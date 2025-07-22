@@ -648,6 +648,67 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             logger.error(f"Enhanced generation failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
+    @app.post("/edit")
+    def edit_blog_post(request: Dict[str, Any]):
+        """Edit a blog post using AI."""
+        content = request.get("content", "")
+        instruction = request.get("instruction", "")
+        
+        if not content or not instruction:
+            raise HTTPException(status_code=400, detail="Content and instruction are required")
+        
+        try:
+            groq_api_key = os.getenv("GROQ_API_KEY")
+            if not groq_api_key:
+                raise ValueError("GROQ_API_KEY not set")
+            
+            logger.info(f"Editing blog post with instruction: {instruction}")
+            
+            # Create edit prompt
+            edit_prompt = f"""You are an expert blog editor. Please edit the following blog post according to the instruction provided.
+
+Original blog post:
+{content}
+
+Edit instruction: {instruction}
+
+Please return only the edited blog post content, maintaining the same format and style. Do not add any explanations or comments."""
+            
+            # Generate edited content using Groq
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {groq_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "llama3-70b-8192",
+                "messages": [
+                    {"role": "user", "content": edit_prompt}
+                ],
+                "max_tokens": 2500,
+                "temperature": 0.3
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            
+            result = response.json()
+            edited_content = result["choices"][0]["message"]["content"]
+            
+            return {
+                "content": edited_content,
+                "instruction_applied": instruction,
+                "model_used": "llama3-70b-8192",
+                "provider_used": "groq-direct",
+                "edited_at": datetime.now().isoformat(),
+                "status": "success"
+            }
+            
+        except Exception as e:
+            logger.error(f"Edit failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
     return app
 
 def main():
