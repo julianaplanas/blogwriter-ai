@@ -15,7 +15,7 @@ API_BASE = "http://localhost:8000"
 
 def test_health_check():
     """Test the health check endpoint"""
-    print("🔍 Testing health check...")
+    print("[*] Testing health check...")
     try:
         response = requests.get(f"{API_BASE}/health")
         if response.status_code == 200:

@@ -28,15 +28,28 @@ logger = logging.getLogger(__name__)
 # Import our agents
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+# Add paths for importing agents from src directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+src_dir = os.path.join(parent_dir, 'src')
+
+# Add both parent and src directories to Python path
+sys.path.insert(0, parent_dir)
+sys.path.insert(0, src_dir)
 
 try:
     from research_agent import ResearchAgent
     from blog_writer_agent import BlogWriterAgent
     from image_agent import ImageAgent, fetch_blog_images
     from editing_agent import EditingAgent, EditResult
+    logger.info("Successfully imported all agents")
 except ImportError as e:
-    logging.error(f"Failed to import agents: {e}")
+    logger.error(f"Failed to import agents: {e}")
+    logger.error(f"Current directory: {current_dir}")
+    logger.error(f"Parent directory: {parent_dir}")
+    logger.error(f"Src directory: {src_dir}")
+    logger.error(f"Python path: {sys.path}")
     raise
 
 from db import BlogStorage
@@ -71,10 +84,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS for local frontend development
+# Configure CORS for frontend development and production
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:8080", 
+    "https://*.onrender.com",
+    "https://ai-blog-writer-frontend.onrender.com"
+]
+
+# Add wildcard for development if needed
+if os.getenv("ENVIRONMENT") == "development":
+    allowed_origins.append("*")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8080", "*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
