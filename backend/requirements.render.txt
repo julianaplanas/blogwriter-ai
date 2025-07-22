@@ -1,0 +1,8 @@
+# Render-compatible requirements (no version pins to avoid conflicts)
+fastapi
+uvicorn
+pydantic
+requests
+groq
+aiosqlite
+python-dotenv
