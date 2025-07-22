@@ -1,4 +1,0 @@
-# Absolute minimum to test Render deployment
-fastapi==0.68.0
-uvicorn==0.15.0
-requests
