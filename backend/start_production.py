@@ -1,82 +1,69 @@
 #!/usr/bin/env python3
 """
 Production start script for Render deployment
-This script provides better error handling and logging for deployment issues.
+Simplified and robust version focused on production deployment.
 """
 
 import os
 import sys
 import logging
-import uvicorn
 
-# Configure logging
+# Simple logging configuration for Render
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
 def main():
-    """Start the FastAPI application with error handling."""
-    logger.info("Starting AI Blog Writer Backend...")
+    """Start the FastAPI application for production."""
+    logger.info("Starting AI Blog Writer Backend for Render...")
     
-    # Log environment info
-    logger.info(f"Python version: {sys.version}")
-    logger.info(f"Current working directory: {os.getcwd()}")
-    logger.info(f"Python path: {sys.path[:3]}...")  # First 3 entries
+    # Get port from Render's environment variable
+    port = int(os.environ.get('PORT', 8000))
+    logger.info(f"Port: {port}")
     
-    # Check for required environment variables
-    required_env_vars = ['BRAVE_API_KEY', 'GROQ_API_KEY', 'PEXELS_API_KEY']
-    missing_vars = []
-    for var in required_env_vars:
-        if not os.getenv(var):
-            missing_vars.append(var)
+    # Log basic environment info
+    logger.info(f"Working directory: {os.getcwd()}")
+    logger.info(f"Python version: {sys.version.split()[0]}")
     
-    if missing_vars:
-        logger.warning(f"Missing environment variables: {missing_vars}")
-        logger.warning("The app will still start, but some features may not work")
-    else:
-        logger.info("All required environment variables are set")
-    
-    # Get port from environment
-    port = int(os.getenv('PORT', 8000))
-    logger.info(f"Using port: {port}")
+    # Check if main.py exists
+    if not os.path.exists('main.py'):
+        logger.error("main.py not found in current directory")
+        logger.error(f"Directory contents: {os.listdir('.')}")
+        sys.exit(1)
     
     try:
-        # Try to import the FastAPI app
-        logger.info("Attempting to import FastAPI app...")
-        from main import app
-        logger.info(f"Successfully imported app: {app}")
+        # Import uvicorn and the app
+        import uvicorn
+        logger.info("Uvicorn imported successfully")
         
-        # Start the server
-        logger.info(f"Starting uvicorn server on 0.0.0.0:{port}")
+        # Import the FastAPI app
+        from main import app
+        logger.info(f"FastAPI app imported: {type(app)}")
+        
+        # Start the server with minimal configuration
+        logger.info(f"Starting server on 0.0.0.0:{port}")
         uvicorn.run(
-            app,
+            "main:app",  # Use string reference instead of app object
             host="0.0.0.0",
             port=port,
-            log_level="info",
-            access_log=True
+            log_level="info"
         )
         
     except ImportError as e:
-        logger.error(f"Failed to import FastAPI app: {e}")
-        logger.error(f"Working directory: {os.getcwd()}")
-        logger.error(f"Directory contents: {os.listdir('.')}")
-        
-        # Try to see what's in the parent directory
-        try:
-            parent_dir = os.path.dirname(os.getcwd())
-            logger.error(f"Parent directory: {parent_dir}")
-            logger.error(f"Parent contents: {os.listdir(parent_dir)}")
-        except:
-            pass
-            
+        logger.error(f"Import error: {e}")
+        # List what's available in the current directory
+        logger.error("Available files:")
+        for file in os.listdir('.'):
+            logger.error(f"  {file}")
         sys.exit(1)
         
     except Exception as e:
-        logger.error(f"Unexpected error starting server: {e}")
+        logger.error(f"Startup error: {e}")
         import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
         sys.exit(1)
 
 if __name__ == "__main__":
