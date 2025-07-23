@@ -632,7 +632,7 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                 placeholder="Enter your blog post topic"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                className="w-full px-6 py-4 pr-32 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[60px] max-h-[100px]"
+                className="w-full px-6 py-4 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[60px] max-h-[100px]"
                 maxLength={200}
                 rows={1}
                 style={{
@@ -652,10 +652,12 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                   }
                 }}
               />
+            </div>
+            <div className="mt-4 flex justify-center">
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating || !topic.trim()}
-                className="absolute right-2 top-2 px-6 py-2 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+                className="px-8 py-3 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
               >
                 {isGenerating ? (
                   <>
@@ -902,9 +904,10 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                   <h3 className="font-medium text-gray-900 mb-4 text-lg">Edit Content</h3>
                   <div className="relative">
                     <textarea
+                      placeholder="How would you like to edit this? Be specific about what changes you want..."
                       value={editInstruction}
                       onChange={(e) => setEditInstruction(e.target.value)}
-                      className="w-full px-5 py-5 pr-20 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[120px] max-h-[300px] leading-relaxed"
+                      className="w-full px-5 py-5 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[120px] max-h-[300px] leading-relaxed"
                       rows={1}
                       style={{
                         height: 'auto',
@@ -923,10 +926,12 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                         }
                       }}
                     />
+                  </div>
+                  <div className="mt-4 flex justify-center">
                     <button
                       onClick={handleEdit}
                       disabled={isEditing || !editInstruction.trim()}
-                      className="absolute right-3 top-3 px-5 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 text-sm font-medium"
+                      className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 text-sm font-medium"
                     >
                       {isEditing ? (
                         <>
