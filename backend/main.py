@@ -118,7 +118,17 @@ def generate_with_groq_api(topic: str, api_key: str) -> str:
         "Content-Type": "application/json"
     }
     
-    prompt = f"Write a comprehensive blog post about {topic}. Include an introduction, main content with key points, and a conclusion. Make it engaging and informative."
+    prompt = f"""Write a comprehensive blog post about {topic} in clean markdown format.
+
+Requirements:
+- Start directly with the title (e.g., "# Title")
+- Include an introduction, main content with key points, and a conclusion
+- Make it engaging and informative
+- Use proper markdown formatting
+- Do NOT add any explanatory text like "Here is the blog post:" or "Main Content:"
+- Return ONLY the markdown content, no metadata or commentary
+
+Write the blog post:"""
     
     data = {
         "model": "llama3-70b-8192",
@@ -227,10 +237,18 @@ def generate_enhanced_blog_with_research(topic: str, groq_api_key: str, brave_ap
         for source in sources[:3]:  # Use top 3 sources
             research_context += f"- {source['title']}: {source['description']}\n"
     
-    prompt = f"""Write a comprehensive blog post about {topic}.{research_context}
-    
-    Include an introduction, main content with key points, and a conclusion. Make it engaging and informative. 
-    If research sources are provided, incorporate relevant insights naturally into the content."""
+    prompt = f"""Write a comprehensive blog post about {topic} in clean markdown format.{research_context}
+
+Requirements:
+- Start directly with the title (e.g., "# Title")
+- Include an introduction, main content with key points, and a conclusion
+- Make it engaging and informative
+- Use proper markdown formatting
+- If research sources are provided, incorporate relevant insights naturally into the content
+- Do NOT add any explanatory text like "Here is the blog post:" or "Main Content:"
+- Return ONLY the markdown content, no metadata or commentary
+
+Write the blog post:"""
     
     # Generate content using Groq
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -683,14 +701,22 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                 raise ValueError("GROQ_API_KEY not set")
             
             # Create edit prompt
-            prompt = f"""Please edit the following content according to the instruction provided.
+            prompt = f"""Edit the following content according to the instruction provided. Return ONLY the edited markdown content.
 
 Original content:
 {content}
 
 Instruction: {instruction}
 
-Please provide the edited content while maintaining the same style and format. Only make changes that align with the instruction."""
+Requirements:
+- Return ONLY the edited markdown content
+- Maintain the same style and format
+- Only make changes that align with the instruction
+- Do NOT add any explanatory text like "Here is the edited content:" or "Main Content:"
+- Do NOT add any metadata or commentary
+- Start directly with the content
+
+Edited content:"""
             
             # Call Groq API
             url = "https://api.groq.com/openai/v1/chat/completions"
