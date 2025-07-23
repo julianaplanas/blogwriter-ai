@@ -112,6 +112,66 @@ def init_database():
 # Import modular agents
 from backend.agents import ResearchAgent, WritingAgent, ImageAgent, EditingAgent
 
+# Place helpers at module level
+import re
+
+def insert_images_into_markdown(markdown: str, images: list) -> str:
+    """
+    Insert images after major headings in the markdown, with captions and source attribution.
+    Images are distributed as evenly as possible after headings (## or ###).
+    """
+    if not images:
+        return markdown
+    lines = markdown.split('\n')
+    heading_indices = [i for i, line in enumerate(lines) if re.match(r'^(##+ )', line)]
+    if not heading_indices:
+        # If no headings, just add all images at the end
+        for img in images:
+            lines.append(f'![{img["alt"]}]({img["medium_url"]})')
+            lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
+        return '\n'.join(lines)
+    # Distribute images after headings
+    img_idx = 0
+    for idx in heading_indices:
+        if img_idx >= len(images):
+            break
+        img = images[img_idx]
+        caption = f'![{img["alt"]}]({img["medium_url"]})\n*Photo by {img["photographer"]} ([source]({img["url"]}))*'
+        lines.insert(idx + 1 + img_idx, caption)
+        img_idx += 1
+    # If images remain, add them at the end
+    for img in images[img_idx:]:
+        lines.append(f'![{img["alt"]}]({img["medium_url"]})')
+        lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
+    return '\n'.join(lines)
+
+def link_citations_to_references(markdown: str) -> str:
+    """
+    Convert inline citations like [1] to markdown links to the references section.
+    Assumes references are in a '## References' section at the end.
+    """
+    citation_pattern = re.compile(r'\[(\d+)\]')
+    markdown = citation_pattern.sub(lambda m: f'[{m.group(1)}](#ref-{m.group(1)})', markdown)
+    def add_anchors_to_references(md: str) -> str:
+        if '## References' not in md:
+            return md
+        parts = md.split('## References', 1)
+        before = parts[0]
+        after = parts[1]
+        ref_lines = after.strip().split('\n')
+        new_ref_lines = []
+        ref_num = 1
+        for line in ref_lines:
+            if line.strip():
+                anchor = f'<a id="ref-{ref_num}"></a>'
+                if not line.strip().startswith('- '):
+                    line = f'- {line.strip()}'
+                new_ref_lines.append(f'{anchor} {line}')
+                ref_num += 1
+        return before + '## References\n' + '\n'.join(new_ref_lines)
+    markdown = add_anchors_to_references(markdown)
+    return markdown
+
 def create_app():
     """Create FastAPI app with AI functionality via HTTP requests."""
     # Initialize database
@@ -414,71 +474,6 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             logger.error(f"Image search failed: {e}")
             return {"error": str(e), "images": []}
     
-    def insert_images_into_markdown(markdown: str, images: list) -> str:
-        """
-        Insert images after major headings in the markdown, with captions and source attribution.
-        Images are distributed as evenly as possible after headings (## or ###).
-        """
-        import re
-        if not images:
-            return markdown
-        lines = markdown.split('\n')
-        heading_indices = [i for i, line in enumerate(lines) if re.match(r'^(##+ )', line)]
-        if not heading_indices:
-            # If no headings, just add all images at the end
-            for img in images:
-                lines.append(f'![{img["alt"]}]({img["medium_url"]})')
-                lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
-            return '\n'.join(lines)
-        # Distribute images after headings
-        img_idx = 0
-        for idx in heading_indices:
-            if img_idx >= len(images):
-                break
-            img = images[img_idx]
-            caption = f'![{img["alt"]}]({img["medium_url"]})\n*Photo by {img["photographer"]} ([source]({img["url"]}))*'
-            lines.insert(idx + 1 + img_idx, caption)
-            img_idx += 1
-        # If images remain, add them at the end
-        for img in images[img_idx:]:
-            lines.append(f'![{img["alt"]}]({img["medium_url"]})')
-            lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
-        return '\n'.join(lines)
-
-def link_citations_to_references(markdown: str) -> str:
-    """
-    Convert inline citations like [1] to markdown links to the references section.
-    Assumes references are in a '## References' section at the end.
-    """
-    # Find all [n] citations
-    citation_pattern = re.compile(r'\[(\d+)\]')
-    # Replace [n] with [n](#ref-n)
-    markdown = citation_pattern.sub(lambda m: f'[{m.group(1)}](#ref-{m.group(1)})', markdown)
-    # Add anchors to references section
-    def add_anchors_to_references(md: str) -> str:
-        if '## References' not in md:
-            return md
-        parts = md.split('## References', 1)
-        before = parts[0]
-        after = parts[1]
-        # Each reference should be a markdown list item, one per line
-        ref_lines = after.strip().split('\n')
-        new_ref_lines = []
-        ref_num = 1
-        for line in ref_lines:
-            # Only process non-empty lines
-            if line.strip():
-                # Add anchor before each reference
-                anchor = f'<a id="ref-{ref_num}"></a>'
-                # Ensure each reference is a markdown list item
-                if not line.strip().startswith('- '):
-                    line = f'- {line.strip()}'
-                new_ref_lines.append(f'{anchor} {line}')
-                ref_num += 1
-        return before + '## References\n' + '\n'.join(new_ref_lines)
-    markdown = add_anchors_to_references(markdown)
-    return markdown
-
     @app.post("/generate-enhanced")
     def generate_enhanced_blog_post(request: Dict[str, Any]):
         """Generate a blog post with research and images using agents."""
