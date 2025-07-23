@@ -158,15 +158,15 @@ def link_citations_to_references(markdown: str) -> str:
         parts = md.split('## References', 1)
         before = parts[0]
         after = parts[1]
-        ref_lines = after.strip().split('\n')
+        # Split references by newlines, or by * or - at the start, or by numbered list
+        ref_lines = re.split(r'\n|\* |\- |\d+\. ', after.strip())
         new_ref_lines = []
         ref_num = 1
         for line in ref_lines:
-            if line.strip():
+            clean_line = line.strip().lstrip('*').lstrip('-').strip()
+            if clean_line:
                 anchor = f'<a id="ref-{ref_num}"></a>'
-                if not line.strip().startswith('- '):
-                    line = f'- {line.strip()}'
-                new_ref_lines.append(f'{anchor} {line}')
+                new_ref_lines.append(f'{anchor} - {clean_line}')
                 ref_num += 1
         return before + '## References\n' + '\n'.join(new_ref_lines)
     markdown = add_anchors_to_references(markdown)
