@@ -145,33 +145,6 @@ def insert_images_into_markdown(markdown: str, images: list) -> str:
         lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
     return '\n'.join(lines)
 
-def link_citations_to_references(markdown: str) -> str:
-    """
-    Convert inline citations like [1] to markdown links to the references section.
-    Assumes references are in a '## References' section at the end.
-    """
-    citation_pattern = re.compile(r'\[(\d+)\]')
-    markdown = citation_pattern.sub(lambda m: f'[{m.group(1)}](#ref-{m.group(1)})', markdown)
-    def add_anchors_to_references(md: str) -> str:
-        if '## References' not in md:
-            return md
-        parts = md.split('## References', 1)
-        before = parts[0]
-        after = parts[1]
-        # Split references by newlines, or by * or - at the start, or by numbered list
-        ref_lines = re.split(r'\n|\* |\- |\d+\. ', after.strip())
-        new_ref_lines = []
-        ref_num = 1
-        for line in ref_lines:
-            clean_line = line.strip().lstrip('*').lstrip('-').strip()
-            if clean_line:
-                anchor = f'<a id="ref-{ref_num}"></a>'
-                new_ref_lines.append(f'{anchor} - {clean_line}')
-                ref_num += 1
-        return before + '## References\n' + '\n'.join(new_ref_lines)
-    markdown = add_anchors_to_references(markdown)
-    return markdown
-
 def create_app():
     """Create FastAPI app with AI functionality via HTTP requests."""
     # Initialize database
@@ -495,9 +468,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             images = image_agent.search(topic)
             # Insert images into markdown (only in backend)
             content_with_images = insert_images_into_markdown(content, images)
-            # Link citations to references and format references
-            final_markdown = link_citations_to_references(content_with_images)
-            word_count = len(final_markdown.split())
+            word_count = len(content_with_images.split())
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             with get_db_connection() as conn:
                 cursor = conn.cursor()
@@ -517,7 +488,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                 ''', (
                     post_id,
                     topic,
-                    final_markdown,
+                    content_with_images,
                     word_count,
                     datetime.now().isoformat(),
                     json.dumps(enhanced_metadata)
@@ -527,7 +498,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             return {
                 "id": post_id,
                 "topic": topic,
-                "content": final_markdown,
+                "content": content_with_images,
                 "word_count": word_count,
                 "sources": sources,
                 "images": images,
