@@ -109,174 +109,8 @@ def init_database():
         conn.commit()
         logger.info("Database initialized with proper schema")
 
-def generate_with_groq_api(topic: str, api_key: str) -> str:
-    """Generate blog content using direct Groq API calls."""
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    prompt = f"""Write a comprehensive blog post about {topic} in clean markdown format.
-
-Requirements:
-- Start directly with the title (e.g., "# Title")
-- Include an introduction, main content with key points, and a conclusion
-- Make it engaging and informative
-- Use proper markdown formatting
-- Do NOT add any explanatory text like "Here is the blog post:" or "Main Content:"
-- Return ONLY the markdown content, no metadata or commentary
-
-Write the blog post:"""
-    
-    data = {
-        "model": "llama3-70b-8192",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 2000,
-        "temperature": 0.7
-    }
-    
-    response = requests.post(url, headers=headers, json=data, timeout=30)
-    response.raise_for_status()
-    
-    result = response.json()
-    return result["choices"][0]["message"]["content"]
-
-def search_with_brave_api(query: str, api_key: str, count: int = 5) -> List[Dict[str, Any]]:
-    """Search for recent articles using Brave Search API."""
-    url = "https://api.search.brave.com/res/v1/web/search"
-    
-    headers = {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": api_key
-    }
-    
-    params = {
-        "q": query,
-        "count": count,
-        "search_lang": "en",
-        "country": "US",
-        "safesearch": "moderate",
-        "freshness": "pw"  # Past week
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        response.raise_for_status()
-        
-        result = response.json()
-        articles = []
-        
-        if "web" in result and "results" in result["web"]:
-            for item in result["web"]["results"]:
-                articles.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "description": item.get("description", ""),
-                    "age": item.get("age", "")
-                })
-        
-        return articles
-    except Exception as e:
-        logger.warning(f"Brave Search API failed: {e}")
-        return []
-
-def search_images_with_pexels(query: str, api_key: str, per_page: int = 3) -> List[Dict[str, Any]]:
-    """Search for images using Pexels API."""
-    url = "https://api.pexels.com/v1/search"
-    
-    headers = {
-        "Authorization": api_key
-    }
-    
-    params = {
-        "query": query,
-        "per_page": per_page,
-        "orientation": "landscape"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        response.raise_for_status()
-        
-        result = response.json()
-        images = []
-        
-        if "photos" in result:
-            for photo in result["photos"]:
-                images.append({
-                    "id": photo.get("id"),
-                    "url": photo["src"]["original"],
-                    "medium_url": photo["src"]["medium"],
-                    "photographer": photo.get("photographer", ""),
-                    "alt": photo.get("alt", query)
-                })
-        
-        return images
-    except Exception as e:
-        logger.warning(f"Pexels API failed: {e}")
-        return []
-
-def generate_enhanced_blog_with_research(topic: str, groq_api_key: str, brave_api_key: str = None) -> Dict[str, Any]:
-    """Generate blog content with research and sources."""
-    sources = []
-    
-    # Try to get research data
-    if brave_api_key:
-        logger.info(f"Researching topic: {topic}")
-        sources = search_with_brave_api(topic, brave_api_key)
-    
-    # Create enhanced prompt with research
-    research_context = ""
-    if sources:
-        research_context = "\n\nRecent research sources:\n"
-        for source in sources[:3]:  # Use top 3 sources
-            research_context += f"- {source['title']}: {source['description']}\n"
-    
-    prompt = f"""Write a comprehensive blog post about {topic} in clean markdown format.{research_context}
-
-Requirements:
-- Start directly with the title (e.g., "# Title")
-- Include an introduction, main content with key points, and a conclusion
-- Make it engaging and informative
-- Use proper markdown formatting
-- If research sources are provided, incorporate relevant insights naturally into the content
-- Do NOT add any explanatory text like "Here is the blog post:" or "Main Content:"
-- Return ONLY the markdown content, no metadata or commentary
-
-Write the blog post:"""
-    
-    # Generate content using Groq
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {groq_api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": "llama3-70b-8192",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 2500,
-        "temperature": 0.7
-    }
-    
-    response = requests.post(url, headers=headers, json=data, timeout=30)
-    response.raise_for_status()
-    
-    result = response.json()
-    content = result["choices"][0]["message"]["content"]
-    
-    return {
-        "content": content,
-        "sources": sources,
-        "research_enabled": bool(sources)
-    }
+# Import modular agents
+from agents import ResearchAgent, WritingAgent, ImageAgent, EditingAgent
 
 def create_app():
     """Create FastAPI app with AI functionality via HTTP requests."""
@@ -333,25 +167,16 @@ def create_app():
     
     @app.post("/generate")
     def generate_blog_post(request: Dict[str, Any]):
-        """Generate a blog post using direct Groq API calls."""
+        """Generate a blog post using the WritingAgent."""
         topic = request.get("topic", "Technology Trends")
-        
         try:
-            # Try to use Groq API directly
-            api_key = os.getenv("GROQ_API_KEY")
-            if not api_key:
-                raise ValueError("GROQ_API_KEY not set")
-            
-            logger.info(f"Generating blog post about: {topic}")
-            content = generate_with_groq_api(topic, api_key)
+            writing_agent = WritingAgent()
+            content = writing_agent.generate(topic)
             word_count = len(content.split())
-            
             # Save to database
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                
                 cursor.execute('''
                     INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -363,11 +188,8 @@ def create_app():
                     datetime.now().isoformat(),
                     json.dumps({"provider": "groq-direct", "model": "llama3-70b-8192"})
                 ))
-                
                 conn.commit()
-            
             logger.info(f"Successfully generated blog post: {post_id}")
-            
             return {
                 "id": post_id,
                 "topic": topic,
@@ -380,7 +202,6 @@ def create_app():
                     "created_at": datetime.now().isoformat()
                 }
             }
-            
         except Exception as e:
             logger.warning(f"AI generation failed: {e}, using fallback")
             
@@ -557,87 +378,65 @@ The key to success lies in careful planning, thoughtful implementation, and cont
     
     @app.post("/research")
     def research_topic(request: Dict[str, Any]):
-        """Research a topic using Brave Search API."""
+        """Research a topic using the ResearchAgent."""
         topic = request.get("topic", "")
         if not topic:
             raise HTTPException(status_code=400, detail="Topic is required")
-        
         try:
-            brave_api_key = os.getenv("BRAVE_API_KEY")
-            if not brave_api_key:
-                return {"error": "Brave API key not configured", "sources": []}
-            
-            sources = search_with_brave_api(topic, brave_api_key)
-            
+            research_agent = ResearchAgent()
+            sources = research_agent.search(topic)
             return {
                 "topic": topic,
                 "sources": sources,
                 "count": len(sources),
                 "status": "success"
             }
-            
         except Exception as e:
             logger.error(f"Research failed: {e}")
             return {"error": str(e), "sources": []}
     
     @app.post("/images")
     def search_images(request: Dict[str, Any]):
-        """Search for images using Pexels API."""
+        """Search for images using the ImageAgent."""
         query = request.get("query", "")
         if not query:
             raise HTTPException(status_code=400, detail="Query is required")
-        
         try:
-            pexels_api_key = os.getenv("PEXELS_API_KEY")
-            if not pexels_api_key:
-                return {"error": "Pexels API key not configured", "images": []}
-            
-            images = search_images_with_pexels(query, pexels_api_key)
-            
+            image_agent = ImageAgent()
+            images = image_agent.search(query)
             return {
                 "query": query,
                 "images": images,
                 "count": len(images),
                 "status": "success"
             }
-            
         except Exception as e:
             logger.error(f"Image search failed: {e}")
             return {"error": str(e), "images": []}
     
     @app.post("/generate-enhanced")
     def generate_enhanced_blog_post(request: Dict[str, Any]):
-        """Generate a blog post with research and images."""
+        """Generate a blog post with research and images using agents."""
         topic = request.get("topic", "Technology Trends")
-        
         try:
-            groq_api_key = os.getenv("GROQ_API_KEY")
-            brave_api_key = os.getenv("BRAVE_API_KEY")
-            pexels_api_key = os.getenv("PEXELS_API_KEY")
-            
-            if not groq_api_key:
-                raise ValueError("GROQ_API_KEY not set")
-            
-            logger.info(f"Generating enhanced blog post about: {topic}")
-            
-            # Generate content with research
-            result = generate_enhanced_blog_with_research(topic, groq_api_key, brave_api_key)
-            content = result["content"]
-            sources = result["sources"]
-            
-            # Search for images
-            images = []
-            if pexels_api_key:
-                images = search_images_with_pexels(topic, pexels_api_key)
-            
+            research_agent = ResearchAgent()
+            writing_agent = WritingAgent()
+            image_agent = ImageAgent()
+            # Research
+            sources = research_agent.search(topic)
+            research_context = ""
+            if sources:
+                research_context = "\n\nRecent research sources:\n"
+                for source in sources[:3]:
+                    research_context += f"- {source['title']}: {source['description']}\n"
+            # Generate content
+            content = writing_agent.generate(topic, research_context)
+            # Images
+            images = image_agent.search(topic)
             word_count = len(content.split())
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
-            # Save to database with enhanced metadata
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                
-                # Enhanced metadata includes sources and images info
                 enhanced_metadata = {
                     "provider": "groq-enhanced",
                     "model": "llama3-70b-8192",
@@ -645,10 +444,9 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                     "images_enabled": bool(images),
                     "source_count": len(sources),
                     "image_count": len(images),
-                    "sources": sources[:3],  # Store top 3 sources in metadata
-                    "images": images[:3]     # Store top 3 images in metadata
+                    "sources": sources[:3],
+                    "images": images[:3]
                 }
-                
                 cursor.execute('''
                     INSERT INTO blog_posts (id, topic, content, word_count, created_at, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -660,11 +458,8 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                     datetime.now().isoformat(),
                     json.dumps(enhanced_metadata)
                 ))
-                
                 conn.commit()
-            
             logger.info(f"Successfully generated enhanced blog post: {post_id}")
-            
             return {
                 "id": post_id,
                 "topic": topic,
@@ -681,76 +476,25 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                     "created_at": datetime.now().isoformat()
                 }
             }
-            
         except Exception as e:
             logger.error(f"Enhanced generation failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
     @app.post("/edit")
     def edit_blog_post(request: Dict[str, Any]):
-        """Edit a blog post using AI."""
+        """Edit a blog post using the EditingAgent."""
         content = request.get("content", "")
         instruction = request.get("instruction", "")
-        
         if not content or not instruction:
             raise HTTPException(status_code=400, detail="Content and instruction are required")
-        
         try:
-            groq_api_key = os.getenv("GROQ_API_KEY")
-            if not groq_api_key:
-                raise ValueError("GROQ_API_KEY not set")
-            
-            # Create edit prompt
-            prompt = f"""Edit the following content according to the instruction provided. Return ONLY the edited markdown content.
-
-Original content:
-{content}
-
-Instruction: {instruction}
-
-Requirements:
-- Return ONLY the edited markdown content
-- Maintain the same style and format
-- Only make changes that align with the instruction
-- Do NOT add any explanatory text like "Here is the edited content:" or "Main Content:"
-- Do NOT add any metadata or commentary
-- Start directly with the content
-
-Edited content:"""
-            
-            # Call Groq API
-            url = "https://api.groq.com/openai/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {groq_api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": "llama3-70b-8192",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 2500,
-                "temperature": 0.7
-            }
-            
-            response = requests.post(url, headers=headers, json=data, timeout=30)
-            response.raise_for_status()
-            
-            result = response.json()
-            edited_content = result["choices"][0]["message"]["content"]
-            
-            # Store version in database (simple version tracking)
+            editing_agent = EditingAgent()
+            edited_content = editing_agent.edit(content, instruction)
             version_id = f"v_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                
-                # Get current version number
                 cursor.execute('SELECT MAX(version_number) FROM versions WHERE post_id = ?', (request.get("post_id", "current"),))
                 max_version = cursor.fetchone()[0] or 0
-                
-                # Store new version
                 cursor.execute('''
                     INSERT INTO versions (id, post_id, content, instruction, created_at, version_number)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -762,9 +506,7 @@ Edited content:"""
                     datetime.now().isoformat(),
                     max_version + 1
                 ))
-                
                 conn.commit()
-            
             return {
                 "content": edited_content,
                 "instruction_applied": instruction,
@@ -774,7 +516,6 @@ Edited content:"""
                 "version_id": version_id,
                 "status": "success"
             }
-            
         except Exception as e:
             logger.error(f"Edit failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))

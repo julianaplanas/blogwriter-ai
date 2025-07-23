@@ -201,15 +201,41 @@ git push heroku main
 - **See edit instructions** for each version
 - **Track changes** with timestamps
 
+## Modular Agent Architecture
+
+The backend is organized around modular agent classes:
+
+- **ResearchAgent**: Finds relevant articles using Brave Search API.
+- **WritingAgent**: Generates structured content using Groq LLM.
+- **ImageAgent**: Fetches relevant images from Pexels API.
+- **EditingAgent**: Edits blog content using Groq LLM.
+
+The FastAPI endpoints coordinate these agents to produce high-quality, well-sourced blog posts with images and version history.
+
+**Workflow:**
+```
+User Topic
+   ↓
+ResearchAgent (Brave)
+   ↓
+WritingAgent (Groq)
+   ↓
+ImageAgent (Pexels)
+   ↓
+EditingAgent (Groq, for edits)
+   ↓
+Blog Post (with sources, images, and versioning)
+```
+
 ## Architecture
 
 ### Backend Structure
 ```
 backend/
-├── main.py              # FastAPI application with all endpoints
-├── requirements.txt     # Python dependencies
-├── venv/               # Virtual environment
-└── blog_posts.db       # SQLite database
+├── main.py        # FastAPI app, coordinates agents and database
+├── agents.py      # Modular agent classes for research, writing, images, editing
+├── requirements.txt
+└── blog_posts.db
 ```
 
 ### Frontend Structure
@@ -221,6 +247,7 @@ frontend/
 ├── lib/               # Utility functions
 └── public/            # Static assets
 ```
+
 
 ## Future Enhancements & Reflection
 
