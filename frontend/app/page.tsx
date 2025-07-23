@@ -645,6 +645,12 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                   target.style.height = 'auto';
                   target.style.height = Math.min(target.scrollHeight, 100) + 'px';
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isGenerating && topic.trim()) handleGenerate();
+                  }
+                }}
               />
               <button
                 onClick={handleGenerate}
@@ -701,6 +707,12 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                     target.style.height = 'auto';
                     target.style.height = Math.min(target.scrollHeight, 120) + 'px';
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!isEditing && editInstruction.trim()) handleEdit();
+                    }
+                  }}
                 />
                 <button
                   onClick={handleEdit}
@@ -719,24 +731,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
               </div>
 
               {isEditing && <p className="text-gray-600 text-sm mt-4 text-center">Applying edits...</p>}
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={copyToClipboard}
-                className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
-              >
-                <Copy className="h-4 w-4" />
-                Copy
-              </button>
-              <button
-                onClick={downloadMarkdown}
-                className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
-              >
-                <Download className="h-4 w-4" />
-                Download
-              </button>
             </div>
 
             {/* Enhanced Stats */}
@@ -843,6 +837,24 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                 </div>
               </div>
             )}
+
+            {/* Actions */}
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={copyToClipboard}
+                className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
+              >
+                <Copy className="h-4 w-4" />
+                Copy
+              </button>
+              <button
+                onClick={downloadMarkdown}
+                className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </button>
+            </div>
 
             {/* Version History */}
             <div className="max-w-2xl mx-auto">
