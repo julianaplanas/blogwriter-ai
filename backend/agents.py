@@ -44,7 +44,12 @@ class ResearchAgent:
             return []
 
 class WritingAgent:
-    """Agent for generating blog content using Groq LLM API."""
+    """Agent for generating blog content using Groq LLM API.
+    The generated markdown should:
+    - Use inline citations like [1], [2] for facts/statements from research
+    - End with a '## References' section listing sources as markdown links
+    - Not include any extra commentary or metadata
+    """
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
 
@@ -54,7 +59,7 @@ class WritingAgent:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        prompt = f"""Write a comprehensive blog post about {topic} in clean markdown format.{research_context}\n\nRequirements:\n- Start directly with the title (e.g., \"# Title\")\n- Include an introduction, main content with key points, and a conclusion\n- Make it engaging and informative\n- Use proper markdown formatting\n- Do NOT add any explanatory text like \"Here is the blog post:\" or \"Main Content:\"\n- Return ONLY the markdown content, no metadata or commentary\n\nWrite the blog post:"""
+        prompt = f"""Write a comprehensive blog post about {topic} in clean markdown format.{research_context}\n\nRequirements:\n- Start directly with the title (e.g., \"# Title\")\n- Include an introduction, main content with key points, and a conclusion\n- Use inline citations like [1], [2] for facts/statements from research\n- At the end, add a '## References' section listing all sources as markdown links\n- Make it engaging and informative\n- Use proper markdown formatting\n- Do NOT add any explanatory text like \"Here is the blog post:\" or \"Main Content:\"\n- Return ONLY the markdown content, no metadata or commentary\n\nWrite the blog post:"""
         data = {
             "model": "llama3-70b-8192",
             "messages": [

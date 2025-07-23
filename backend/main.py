@@ -414,6 +414,37 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             logger.error(f"Image search failed: {e}")
             return {"error": str(e), "images": []}
     
+    def insert_images_into_markdown(markdown: str, images: list) -> str:
+        """
+        Insert images after major headings in the markdown, with captions and source attribution.
+        Images are distributed as evenly as possible after headings (## or ###).
+        """
+        import re
+        if not images:
+            return markdown
+        lines = markdown.split('\n')
+        heading_indices = [i for i, line in enumerate(lines) if re.match(r'^(##+ )', line)]
+        if not heading_indices:
+            # If no headings, just add all images at the end
+            for img in images:
+                lines.append(f'![{img["alt"]}]({img["medium_url"]})')
+                lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
+            return '\n'.join(lines)
+        # Distribute images after headings
+        img_idx = 0
+        for idx in heading_indices:
+            if img_idx >= len(images):
+                break
+            img = images[img_idx]
+            caption = f'![{img["alt"]}]({img["medium_url"]})\n*Photo by {img["photographer"]} ([source]({img["url"]}))*'
+            lines.insert(idx + 1 + img_idx, caption)
+            img_idx += 1
+        # If images remain, add them at the end
+        for img in images[img_idx:]:
+            lines.append(f'![{img["alt"]}]({img["medium_url"]})')
+            lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
+        return '\n'.join(lines)
+    
     @app.post("/generate-enhanced")
     def generate_enhanced_blog_post(request: Dict[str, Any]):
         """Generate a blog post with research and images using agents."""
@@ -433,7 +464,9 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             content = writing_agent.generate(topic, research_context)
             # Images
             images = image_agent.search(topic)
-            word_count = len(content.split())
+            # Insert images into markdown
+            content_with_images = insert_images_into_markdown(content, images)
+            word_count = len(content_with_images.split())
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             with get_db_connection() as conn:
                 cursor = conn.cursor()
@@ -453,7 +486,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                 ''', (
                     post_id,
                     topic,
-                    content,
+                    content_with_images,
                     word_count,
                     datetime.now().isoformat(),
                     json.dumps(enhanced_metadata)
@@ -463,7 +496,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             return {
                 "id": post_id,
                 "topic": topic,
-                "content": content,
+                "content": content_with_images,
                 "word_count": word_count,
                 "sources": sources,
                 "images": images,
