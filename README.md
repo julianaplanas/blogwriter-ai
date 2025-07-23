@@ -34,6 +34,9 @@ The system includes both a FastAPI backend and a modern Next.js frontend for a c
 
 ### Development Tools
 - **Cursor**: AI-powered code editor for development and debugging
+- **Copilot (Claude Sonnet 4)**: Advanced code completion and refactoring in the editor
+- **ChatGPT 4o**: Used for project strategy, architecture, and prompt engineering
+- **Vercel v0**: Frontend component design and rapid UI prototyping
 - **GitHub**: Version control and collaboration
 - **Heroku**: Backend deployment and hosting
 - **Vercel**: Frontend deployment and hosting
@@ -69,7 +72,7 @@ The system includes both a FastAPI backend and a modern Next.js frontend for a c
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/blogwriter-ai.git
+git clone https://github.com/julianaplanas/blogwriter-ai
 cd blogwriter-ai
 ```
 
@@ -219,32 +222,12 @@ frontend/
 └── public/            # Static assets
 ```
 
-## Development
+## Future Enhancements & Reflection
 
-### Local Development
-- Backend: `http://localhost:8000`
-- Frontend: `http://localhost:3000`
-- API Docs: `http://localhost:8000/docs`
+This project demonstrates what's possible with free-tier APIs and open-source tools, but there are several exciting directions for expansion:
 
-### Testing
-- Backend: Test endpoints with the interactive API docs
-- Frontend: Test UI components and functionality
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support and questions:
-- Create an issue on GitHub
-- Check the API documentation at `/docs` when running locally
-- Review the environment variable configuration
+- **Advanced AI Model Integration**: Multi-model orchestration, premium LLMs, and fine-tuning for specialized content.
+- **Enhanced Research Capabilities**: Multi-source research, real-time data, and advanced filtering for credibility.
+- **Professional Media Services**: Premium stock photos, AI-generated images, and video/media integration.
+- **Production-Scale Features**: Authentication, analytics, editorial workflows, and advanced content management.
+- **Technical Architecture Improvements**: Microservices, real-time collaboration, advanced caching, and CDN integration.
