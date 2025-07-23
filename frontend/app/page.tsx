@@ -687,255 +687,509 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
 
         {/* Content Area */}
         {markdown && (
-          <div className="space-y-12">
-            {/* Edit Section */}
-            <div className="max-w-2xl mx-auto">
-              <div className="relative">
-                <textarea
-                  placeholder="How would you like to edit this?"
-                  value={editInstruction}
-                  onChange={(e) => setEditInstruction(e.target.value)}
-                  className="w-full px-6 py-4 pr-20 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[60px] max-h-[120px]"
-                  rows={1}
-                  style={{
-                    height: 'auto',
-                    minHeight: '60px',
-                    maxHeight: '120px'
-                  }}
-                  onInput={(e) => {
-                    const target = e.target as HTMLTextAreaElement;
-                    target.style.height = 'auto';
-                    target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (!isEditing && editInstruction.trim()) handleEdit();
-                    }
-                  }}
-                />
-                <button
-                  onClick={handleEdit}
-                  disabled={isEditing || !editInstruction.trim()}
-                  className="absolute right-2 top-2 px-6 py-2 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
-                >
-                  {isEditing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="hidden sm:inline">Editing...</span>
-                    </>
+          <div className="space-y-12 lg:space-y-0">
+            {/* Desktop: Side-by-side layout */}
+            <div className="hidden lg:grid lg:grid-cols-3 lg:gap-8">
+              {/* Main content area - takes 2/3 of the space */}
+              <div className="lg:col-span-2 space-y-8">
+                {/* Enhanced Stats */}
+                {metadata && (
+                  <div className="text-center space-y-2">
+                    <p className="text-gray-600 text-sm">
+                      {metadata.word_count} words • {metadata.sources_count} sources • {metadata.images_count} images
+                    </p>
+                    {editInfo?.edited_at && (
+                      <p className="text-gray-500 text-xs">
+                        Last edited: {new Date(editInfo.edited_at).toLocaleString()} 
+                        {editInfo.model_used && ` • ${editInfo.model_used}`}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Content Preview */}
+                <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-gray-200">
+                  <div className="prose prose-lg max-w-none">
+                    <ReactMarkdown
+                      components={{
+                        img: ({ src, alt }) => {
+                          // Handle different types of images
+                          let imgSrc = src || "/placeholder.svg"
+                          
+                          // If it's an Unsplash URL that might be blocked, use placeholder
+                          if (src?.includes('unsplash.com')) {
+                            imgSrc = "/placeholder.svg"
+                          }
+                          // If it's a Pexels URL, use it directly
+                          else if (src?.includes('pexels.com')) {
+                            imgSrc = src
+                          }
+                          
+                          return (
+                            <img
+                              src={imgSrc}
+                              alt={alt || "Blog image"}
+                              className="rounded-2xl shadow-sm max-w-full h-auto my-8"
+                              onError={(e) => {
+                                // Fallback to placeholder if image fails to load
+                                const target = e.target as HTMLImageElement
+                                if (target.src !== "/placeholder.svg") {
+                                  target.src = "/placeholder.svg"
+                                }
+                              }}
+                              loading="lazy"
+                            />
+                          )
+                        },
+                        h1: ({ children }) => (
+                          <h1 className="text-4xl font-medium text-black mb-8 leading-tight">{children}</h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-3xl font-medium text-black mb-6 mt-12 leading-tight">{children}</h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-2xl font-medium text-black mb-4 mt-8 leading-tight">{children}</h3>
+                        ),
+                        p: ({ children }) => <p className="text-gray-700 mb-6 leading-relaxed text-lg">{children}</p>,
+                        ul: ({ children }) => (
+                          <ul className="list-disc list-inside mb-6 text-gray-700 space-y-2">{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal list-inside mb-6 text-gray-700 space-y-2">{children}</ol>
+                        ),
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-4 border-black pl-6 italic text-gray-700 mb-6 text-lg">
+                            {children}
+                          </blockquote>
+                        ),
+                        code: ({ children }) => (
+                          <code className="bg-gray-100 px-3 py-1 rounded-lg text-sm font-mono">{children}</code>
+                        ),
+                        hr: () => <hr className="border-gray-200 my-12" />,
+                      }}
+                    >
+                      {markdown}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+
+                {/* Sources/References Section */}
+                {references.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <h3 className="font-medium text-gray-900 mb-4">Sources & References</h3>
+                    <div className="space-y-3">
+                      {references.map((ref, index) => (
+                        <div key={index} className="border-l-4 border-blue-500 pl-4">
+                          <a
+                            href={ref.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm block"
+                          >
+                            {ref.title}
+                          </a>
+                          <p className="text-xs text-gray-500 mt-1 truncate">{ref.url}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={copyToClipboard}
+                    className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy
+                  </button>
+                  <button
+                    onClick={downloadMarkdown}
+                    className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </button>
+                </div>
+              </div>
+
+              {/* Edit panel - takes 1/3 of the space */}
+              <div className="space-y-6">
+                {/* Edit Section */}
+                <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6 sticky top-6">
+                  <h3 className="font-medium text-gray-900 mb-4">Edit Content</h3>
+                  <div className="relative">
+                    <textarea
+                      placeholder="How would you like to edit this?"
+                      value={editInstruction}
+                      onChange={(e) => setEditInstruction(e.target.value)}
+                      className="w-full px-4 py-3 pr-16 text-sm bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[60px] max-h-[120px]"
+                      rows={1}
+                      style={{
+                        height: 'auto',
+                        minHeight: '60px',
+                        maxHeight: '120px'
+                      }}
+                      onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = 'auto';
+                        target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (!isEditing && editInstruction.trim()) handleEdit();
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={handleEdit}
+                      disabled={isEditing || !editInstruction.trim()}
+                      className="absolute right-2 top-2 px-4 py-1 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-1 text-sm"
+                    >
+                      {isEditing ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span className="hidden sm:inline">Editing...</span>
+                        </>
+                      ) : (
+                        "Edit"
+                      )}
+                    </button>
+                  </div>
+
+                  {isEditing && <p className="text-gray-600 text-xs mt-3 text-center">Applying edits...</p>}
+                </div>
+
+                {/* Version History */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-gray-900 text-sm">Version History</h3>
+                  </div>
+                  {versionHistory.length === 0 ? (
+                    <p className="text-gray-500 text-xs text-center py-4">No version history available</p>
                   ) : (
-                    "Edit"
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {versionHistory.slice().reverse().map((version, index) => {
+                        const isCurrentVersion = version.version_id === actualCurrentVersionId
+                        return (
+                          <div key={version.version_id} className={`p-3 rounded-lg bg-white shadow-sm border text-xs ${isCurrentVersion ? 'border-green-500' : ''}`}>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-gray-900">
+                                    {version.version_id}
+                                  </span>
+                                  {isCurrentVersion && (
+                                    <span className="px-1 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
+                                      Current
+                                    </span>
+                                  )}
+                                </div>
+                                {version.instruction && version.instruction !== "Initial version - no changes" && (
+                                  <div className="mb-2">
+                                    <p className="text-xs font-medium text-gray-700 mb-1">Edit:</p>
+                                    <p className="text-xs text-gray-600 bg-gray-50 p-1 rounded italic truncate">
+                                      "{version.instruction}"
+                                    </p>
+                                  </div>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  {version.timestamp ? 
+                                    new Date(version.timestamp).toLocaleTimeString() : 
+                                    (version.edited_at ? new Date(version.edited_at).toLocaleTimeString() : 'Unknown')
+                                  }
+                                </p>
+                              </div>
+                              <div className="ml-2">
+                                {!isCurrentVersion && (
+                                  <button
+                                    onClick={async () => {
+                                      setIsReverting(true)
+                                      try {
+                                        const response = await fetch(`${API_BASE_URL}/edit/undo/${version.version_id}`, { method: "POST" })
+                                        if (!response.ok) throw new Error("Failed to revert")
+                                        const data = await response.json()
+                                        setMarkdown(cleanMarkdown(data.markdown))
+                                        setActualCurrentVersionId(version.version_id)
+                                        setCurrentVersionId(version.version_id)
+                                        toast({ title: `Reverted to version ${version.version_id}` })
+                                        await fetchVersionHistory(currentPostId)
+                                      } catch (e) {
+                                        toast({ title: "Failed to revert", variant: "destructive" })
+                                      } finally {
+                                        setIsReverting(false)
+                                      }
+                                    }}
+                                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                    disabled={isReverting}
+                                  >
+                                    {isReverting ? 'Reverting...' : 'Revert'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile: Stacked layout */}
+            <div className="lg:hidden space-y-8">
+              {/* Edit Section */}
+              <div className="max-w-2xl mx-auto">
+                <div className="relative">
+                  <textarea
+                    placeholder="How would you like to edit this?"
+                    value={editInstruction}
+                    onChange={(e) => setEditInstruction(e.target.value)}
+                    className="w-full px-6 py-4 pr-20 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[60px] max-h-[120px]"
+                    rows={1}
+                    style={{
+                      height: 'auto',
+                      minHeight: '60px',
+                      maxHeight: '120px'
+                    }}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = 'auto';
+                      target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isEditing && editInstruction.trim()) handleEdit();
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleEdit}
+                    disabled={isEditing || !editInstruction.trim()}
+                    className="absolute right-2 top-2 px-6 py-2 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+                  >
+                    {isEditing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="hidden sm:inline">Editing...</span>
+                      </>
+                    ) : (
+                      "Edit"
+                    )}
+                  </button>
+                </div>
+
+                {isEditing && <p className="text-gray-600 text-sm mt-4 text-center">Applying edits...</p>}
+              </div>
+
+              {/* Enhanced Stats */}
+              {metadata && (
+                <div className="text-center space-y-2">
+                  <p className="text-gray-600 text-sm">
+                    {metadata.word_count} words • {metadata.sources_count} sources • {metadata.images_count} images
+                  </p>
+                  {editInfo?.edited_at && (
+                    <p className="text-gray-500 text-xs">
+                      Last edited: {new Date(editInfo.edited_at).toLocaleString()} 
+                      {editInfo.model_used && ` • ${editInfo.model_used}`}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Content Preview */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-gray-200">
+                <div className="prose prose-lg max-w-none">
+                  <ReactMarkdown
+                    components={{
+                      img: ({ src, alt }) => {
+                        // Handle different types of images
+                        let imgSrc = src || "/placeholder.svg"
+                        
+                        // If it's an Unsplash URL that might be blocked, use placeholder
+                        if (src?.includes('unsplash.com')) {
+                          imgSrc = "/placeholder.svg"
+                        }
+                        // If it's a Pexels URL, use it directly
+                        else if (src?.includes('pexels.com')) {
+                          imgSrc = src
+                        }
+                        
+                        return (
+                          <img
+                            src={imgSrc}
+                            alt={alt || "Blog image"}
+                            className="rounded-2xl shadow-sm max-w-full h-auto my-8"
+                            onError={(e) => {
+                              // Fallback to placeholder if image fails to load
+                              const target = e.target as HTMLImageElement
+                              if (target.src !== "/placeholder.svg") {
+                                target.src = "/placeholder.svg"
+                              }
+                            }}
+                            loading="lazy"
+                          />
+                        )
+                      },
+                      h1: ({ children }) => (
+                        <h1 className="text-4xl font-medium text-black mb-8 leading-tight">{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-3xl font-medium text-black mb-6 mt-12 leading-tight">{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-2xl font-medium text-black mb-4 mt-8 leading-tight">{children}</h3>
+                      ),
+                      p: ({ children }) => <p className="text-gray-700 mb-6 leading-relaxed text-lg">{children}</p>,
+                      ul: ({ children }) => (
+                        <ul className="list-disc list-inside mb-6 text-gray-700 space-y-2">{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="list-decimal list-inside mb-6 text-gray-700 space-y-2">{children}</ol>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-black pl-6 italic text-gray-700 mb-6 text-lg">
+                          {children}
+                        </blockquote>
+                      ),
+                      code: ({ children }) => (
+                        <code className="bg-gray-100 px-3 py-1 rounded-lg text-sm font-mono">{children}</code>
+                      ),
+                      hr: () => <hr className="border-gray-200 my-12" />,
+                    }}
+                  >
+                    {markdown}
+                  </ReactMarkdown>
+                </div>
+              </div>
+
+              {/* Sources/References Section */}
+              {references.length > 0 && (
+                <div className="max-w-2xl mx-auto mt-8">
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <h3 className="font-medium text-gray-900 mb-4">Sources & References</h3>
+                    <div className="space-y-3">
+                      {references.map((ref, index) => (
+                        <div key={index} className="border-l-4 border-blue-500 pl-4">
+                          <a
+                            href={ref.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm block"
+                          >
+                            {ref.title}
+                          </a>
+                          <p className="text-xs text-gray-500 mt-1 truncate">{ref.url}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={copyToClipboard}
+                  className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy
+                </button>
+                <button
+                  onClick={downloadMarkdown}
+                  className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
                 </button>
               </div>
 
-              {isEditing && <p className="text-gray-600 text-sm mt-4 text-center">Applying edits...</p>}
-            </div>
-
-            {/* Enhanced Stats */}
-            {metadata && (
-              <div className="text-center space-y-2">
-                <p className="text-gray-600 text-sm">
-                  {metadata.word_count} words • {metadata.sources_count} sources • {metadata.images_count} images
-                </p>
-                {editInfo?.edited_at && (
-                  <p className="text-gray-500 text-xs">
-                    Last edited: {new Date(editInfo.edited_at).toLocaleString()} 
-                    {editInfo.model_used && ` • ${editInfo.model_used}`}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Content Preview */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-gray-200">
-              <div className="prose prose-lg max-w-none">
-                <ReactMarkdown
-                  components={{
-                    img: ({ src, alt }) => {
-                      // Handle different types of images
-                      let imgSrc = src || "/placeholder.svg"
-                      
-                      // If it's an Unsplash URL that might be blocked, use placeholder
-                      if (src?.includes('unsplash.com')) {
-                        imgSrc = "/placeholder.svg"
-                      }
-                      // If it's a Pexels URL, use it directly
-                      else if (src?.includes('pexels.com')) {
-                        imgSrc = src
-                      }
-                      
-                      return (
-                        <img
-                          src={imgSrc}
-                          alt={alt || "Blog image"}
-                          className="rounded-2xl shadow-sm max-w-full h-auto my-8"
-                          onError={(e) => {
-                            // Fallback to placeholder if image fails to load
-                            const target = e.target as HTMLImageElement
-                            if (target.src !== "/placeholder.svg") {
-                              target.src = "/placeholder.svg"
-                            }
-                          }}
-                          loading="lazy"
-                        />
-                      )
-                    },
-                    h1: ({ children }) => (
-                      <h1 className="text-4xl font-medium text-black mb-8 leading-tight">{children}</h1>
-                    ),
-                    h2: ({ children }) => (
-                      <h2 className="text-3xl font-medium text-black mb-6 mt-12 leading-tight">{children}</h2>
-                    ),
-                    h3: ({ children }) => (
-                      <h3 className="text-2xl font-medium text-black mb-4 mt-8 leading-tight">{children}</h3>
-                    ),
-                    p: ({ children }) => <p className="text-gray-700 mb-6 leading-relaxed text-lg">{children}</p>,
-                    ul: ({ children }) => (
-                      <ul className="list-disc list-inside mb-6 text-gray-700 space-y-2">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="list-decimal list-inside mb-6 text-gray-700 space-y-2">{children}</ol>
-                    ),
-                    blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 border-black pl-6 italic text-gray-700 mb-6 text-lg">
-                        {children}
-                      </blockquote>
-                    ),
-                    code: ({ children }) => (
-                      <code className="bg-gray-100 px-3 py-1 rounded-lg text-sm font-mono">{children}</code>
-                    ),
-                    hr: () => <hr className="border-gray-200 my-12" />,
-                  }}
-                >
-                  {markdown}
-                </ReactMarkdown>
-              </div>
-            </div>
-
-            {/* Sources/References Section */}
-            {references.length > 0 && (
-              <div className="max-w-2xl mx-auto mt-8">
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Sources & References</h3>
-                  <div className="space-y-3">
-                    {references.map((ref, index) => (
-                      <div key={index} className="border-l-4 border-blue-500 pl-4">
-                        <a
-                          href={ref.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 font-medium text-sm block"
-                        >
-                          {ref.title}
-                        </a>
-                        <p className="text-xs text-gray-500 mt-1 truncate">{ref.url}</p>
-                      </div>
-                    ))}
+              {/* Version History */}
+              <div className="max-w-2xl mx-auto">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-gray-900">Version History</h3>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={copyToClipboard}
-                className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
-              >
-                <Copy className="h-4 w-4" />
-                Copy
-              </button>
-              <button
-                onClick={downloadMarkdown}
-                className="flex items-center gap-2 px-6 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-white transition-all duration-200"
-              >
-                <Download className="h-4 w-4" />
-                Download
-              </button>
-            </div>
-
-            {/* Version History */}
-            <div className="max-w-2xl mx-auto">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium text-gray-900">Version History</h3>
-                </div>
-                {versionHistory.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-4">No version history available</p>
-                ) : (
-                  <div className="space-y-3">
-                    {versionHistory.slice().reverse().map((version, index) => {
-                      const isCurrentVersion = version.version_id === actualCurrentVersionId
-                      return (
-                        <div key={version.version_id} className={`p-4 rounded-lg bg-white shadow-sm border ${isCurrentVersion ? 'border-green-500' : ''}`}>
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="font-medium text-gray-900 text-sm">
-                                  {version.version_id}
-                                </span>
-                                {isCurrentVersion && (
-                                  <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                                    Current
+                  {versionHistory.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-4">No version history available</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {versionHistory.slice().reverse().map((version, index) => {
+                        const isCurrentVersion = version.version_id === actualCurrentVersionId
+                        return (
+                          <div key={version.version_id} className={`p-4 rounded-lg bg-white shadow-sm border ${isCurrentVersion ? 'border-green-500' : ''}`}>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-medium text-gray-900 text-sm">
+                                    {version.version_id}
                                   </span>
+                                  {isCurrentVersion && (
+                                    <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                                      Current
+                                    </span>
+                                  )}
+                                </div>
+                                {version.instruction && version.instruction !== "Initial version - no changes" && (
+                                  <div className="mb-3">
+                                    <p className="text-sm font-medium text-gray-700 mb-1">Edit Instruction:</p>
+                                    <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded italic">
+                                      "{version.instruction}"
+                                    </p>
+                                  </div>
+                                )}
+                                {version.diff_summary && (
+                                  <div className="mb-3">
+                                    <p className="text-sm font-medium text-blue-700 mb-1">Diff Summary:</p>
+                                    <p className="text-xs text-blue-700 bg-blue-50 p-2 rounded font-mono">{version.diff_summary}</p>
+                                  </div>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  {version.timestamp ? 
+                                    new Date(version.timestamp).toLocaleString() : 
+                                    (version.edited_at ? new Date(version.edited_at).toLocaleString() : 'Unknown date')
+                                  }
+                                </p>
+                              </div>
+                              <div className="ml-4 flex flex-col gap-2">
+                                {!isCurrentVersion && (
+                                  <button
+                                    onClick={async () => {
+                                      setIsReverting(true)
+                                      try {
+                                        const response = await fetch(`${API_BASE_URL}/edit/undo/${version.version_id}`, { method: "POST" })
+                                        if (!response.ok) throw new Error("Failed to revert")
+                                        const data = await response.json()
+                                        setMarkdown(cleanMarkdown(data.markdown))
+                                        setActualCurrentVersionId(version.version_id)
+                                        setCurrentVersionId(version.version_id)
+                                        toast({ title: `Reverted to version ${version.version_id}` })
+                                        await fetchVersionHistory(currentPostId)
+                                      } catch (e) {
+                                        toast({ title: "Failed to revert", variant: "destructive" })
+                                      } finally {
+                                        setIsReverting(false)
+                                      }
+                                    }}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                    disabled={isReverting}
+                                  >
+                                    {isReverting ? 'Reverting...' : 'Revert to this version'}
+                                  </button>
                                 )}
                               </div>
-                              {version.instruction && version.instruction !== "Initial version - no changes" && (
-                                <div className="mb-3">
-                                  <p className="text-sm font-medium text-gray-700 mb-1">Edit Instruction:</p>
-                                  <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded italic">
-                                    "{version.instruction}"
-                                  </p>
-                                </div>
-                              )}
-                              {version.diff_summary && (
-                                <div className="mb-3">
-                                  <p className="text-sm font-medium text-blue-700 mb-1">Diff Summary:</p>
-                                  <p className="text-xs text-blue-700 bg-blue-50 p-2 rounded font-mono">{version.diff_summary}</p>
-                                </div>
-                              )}
-                              <p className="text-xs text-gray-500">
-                                {version.timestamp ? 
-                                  new Date(version.timestamp).toLocaleString() : 
-                                  (version.edited_at ? new Date(version.edited_at).toLocaleString() : 'Unknown date')
-                                }
-                              </p>
-                            </div>
-                            <div className="ml-4 flex flex-col gap-2">
-                              {!isCurrentVersion && (
-                                <button
-                                  onClick={async () => {
-                                    setIsReverting(true)
-                                    try {
-                                      const response = await fetch(`${API_BASE_URL}/edit/undo/${version.version_id}`, { method: "POST" })
-                                      if (!response.ok) throw new Error("Failed to revert")
-                                      const data = await response.json()
-                                      setMarkdown(cleanMarkdown(data.markdown))
-                                      setActualCurrentVersionId(version.version_id)
-                                      setCurrentVersionId(version.version_id)
-                                      toast({ title: `Reverted to version ${version.version_id}` })
-                                      await fetchVersionHistory(currentPostId)
-                                    } catch (e) {
-                                      toast({ title: "Failed to revert", variant: "destructive" })
-                                    } finally {
-                                      setIsReverting(false)
-                                    }
-                                  }}
-                                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                                  disabled={isReverting}
-                                >
-                                  {isReverting ? 'Reverting...' : 'Revert to this version'}
-                                </button>
-                              )}
                             </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
