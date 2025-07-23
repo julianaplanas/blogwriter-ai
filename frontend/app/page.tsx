@@ -902,7 +902,6 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                   <h3 className="font-medium text-gray-900 mb-4 text-lg">Edit Content</h3>
                   <div className="relative">
                     <textarea
-                      placeholder="How would you like to edit this? Be specific about what changes you want..."
                       value={editInstruction}
                       onChange={(e) => setEditInstruction(e.target.value)}
                       className="w-full px-5 py-5 pr-20 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[120px] max-h-[300px] leading-relaxed"
