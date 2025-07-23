@@ -689,8 +689,8 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
         {markdown && (
           <div className="space-y-12 lg:space-y-0">
             {/* Desktop: Side-by-side layout */}
-            <div className="hidden lg:grid lg:grid-cols-4 lg:gap-8">
-              {/* Main content area - takes 3/4 of the space */}
+            <div className="hidden lg:grid lg:grid-cols-5 lg:gap-8">
+              {/* Main content area - takes 3/5 of the space */}
               <div className="lg:col-span-3 space-y-8">
                 {/* Enhanced Stats */}
                 {metadata && (
@@ -895,27 +895,27 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                 </div>
               </div>
 
-              {/* Edit panel - takes 1/4 of the space */}
-              <div>
+              {/* Edit panel - takes 2/5 of the space */}
+              <div className="lg:col-span-2">
                 {/* Edit Section */}
                 <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6 sticky top-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Edit Content</h3>
+                  <h3 className="font-medium text-gray-900 mb-4 text-lg">Edit Content</h3>
                   <div className="relative">
                     <textarea
-                      placeholder="How would you like to edit this?"
+                      placeholder="How would you like to edit this? Be specific about what changes you want..."
                       value={editInstruction}
                       onChange={(e) => setEditInstruction(e.target.value)}
-                      className="w-full px-4 py-4 pr-16 text-base bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[80px] max-h-[200px]"
+                      className="w-full px-5 py-5 pr-20 text-lg bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent placeholder-gray-500 resize-none min-h-[120px] max-h-[300px] leading-relaxed"
                       rows={1}
                       style={{
                         height: 'auto',
-                        minHeight: '80px',
-                        maxHeight: '200px'
+                        minHeight: '120px',
+                        maxHeight: '300px'
                       }}
                       onInput={(e) => {
                         const target = e.target as HTMLTextAreaElement;
                         target.style.height = 'auto';
-                        target.style.height = Math.min(target.scrollHeight, 200) + 'px';
+                        target.style.height = Math.min(target.scrollHeight, 300) + 'px';
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -927,20 +927,26 @@ As we look toward the future, ${topic} will undoubtedly play a crucial role in s
                     <button
                       onClick={handleEdit}
                       disabled={isEditing || !editInstruction.trim()}
-                      className="absolute right-2 top-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-1 text-sm"
+                      className="absolute right-3 top-3 px-5 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 text-sm font-medium"
                     >
                       {isEditing ? (
                         <>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span className="hidden sm:inline">Editing...</span>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Editing...</span>
                         </>
                       ) : (
-                        "Edit"
+                        "Apply Edit"
                       )}
                     </button>
                   </div>
 
-                  {isEditing && <p className="text-gray-600 text-xs mt-3 text-center">Applying edits...</p>}
+                  {isEditing && <p className="text-gray-600 text-sm mt-4 text-center">Applying your edits...</p>}
+                  
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Tip:</strong> Be specific about what you want to change. For example: "Make the introduction more engaging" or "Add more details about the benefits"
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
