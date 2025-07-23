@@ -110,7 +110,7 @@ def init_database():
         logger.info("Database initialized with proper schema")
 
 # Import modular agents
-from agents import ResearchAgent, WritingAgent, ImageAgent, EditingAgent
+from backend.agents import ResearchAgent, WritingAgent, ImageAgent, EditingAgent
 
 def create_app():
     """Create FastAPI app with AI functionality via HTTP requests."""
