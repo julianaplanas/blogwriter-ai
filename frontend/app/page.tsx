@@ -81,39 +81,6 @@ export default function AIBlogWriter() {
       .trim()
   }
 
-  // Helper: Insert images into markdown in a natural way with source info
-  const insertImagesIntoMarkdown = (markdown: string, images: Array<{ url: string; alt_text: string; photographer?: string }>) => {
-    if (!images || images.length === 0) return markdown;
-    const lines = markdown.split('\n');
-    // Find section headings (lines starting with ## or ###)
-    const sectionIndexes = lines
-      .map((line, idx) => (/^##+ /.test(line) ? idx : -1))
-      .filter(idx => idx > 0);
-    // Always insert after the intro (after first non-empty line)
-    let insertPoints = [1];
-    if (sectionIndexes.length > 0) {
-      insertPoints = [sectionIndexes[0]];
-      if (sectionIndexes.length > 1) insertPoints.push(sectionIndexes[1]);
-      if (sectionIndexes.length > 2) insertPoints.push(sectionIndexes[2]);
-    }
-    // If not enough sections, spread images evenly
-    while (insertPoints.length < images.length) {
-      insertPoints.push(lines.length - 1);
-    }
-    // Insert images at calculated points
-    let offset = 0;
-    images.forEach((img, i) => {
-      const caption = img.photographer
-        ? `*Image source: [${img.photographer}](${img.url})*`
-        : `*Image source: [Pexels](${img.url})*`;
-      const imgBlock = `![${img.alt_text || 'Blog image'}](${img.url})\n${caption}`;
-      const idx = Math.min(insertPoints[i] + offset, lines.length);
-      lines.splice(idx, 0, imgBlock);
-      offset++;
-    });
-    return lines.join('\n');
-  };
-
   // Clear version history when component mounts
   useEffect(() => {
     setVersionHistory([])
@@ -276,16 +243,7 @@ export default function AIBlogWriter() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       const data = await response.json()
-      // Insert images into markdown in a natural way
-      const markdownWithImages = insertImagesIntoMarkdown(
-        data.content,
-        (data.images || []).map((image: any) => ({
-          url: image.medium_url || image.url || "",
-          alt_text: image.alt || image.photographer || "Blog image",
-          photographer: image.photographer || undefined
-        }))
-      );
-      const cleanedMarkdown = cleanMarkdown(markdownWithImages)
+      const cleanedMarkdown = cleanMarkdown(data.content)
       setMarkdown(cleanedMarkdown)
       setCurrentPostId(data.id)
       // Handle sources (research results)

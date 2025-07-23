@@ -444,7 +444,41 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             lines.append(f'![{img["alt"]}]({img["medium_url"]})')
             lines.append(f'*Photo by {img["photographer"]} ([source]({img["url"]}))*')
         return '\n'.join(lines)
-    
+
+def link_citations_to_references(markdown: str) -> str:
+    """
+    Convert inline citations like [1] to markdown links to the references section.
+    Assumes references are in a '## References' section at the end.
+    """
+    # Find all [n] citations
+    citation_pattern = re.compile(r'\[(\d+)\]')
+    # Replace [n] with [n](#ref-n)
+    markdown = citation_pattern.sub(lambda m: f'[{m.group(1)}](#ref-{m.group(1)})', markdown)
+    # Add anchors to references section
+    def add_anchors_to_references(md: str) -> str:
+        if '## References' not in md:
+            return md
+        parts = md.split('## References', 1)
+        before = parts[0]
+        after = parts[1]
+        # Each reference should be a markdown list item, one per line
+        ref_lines = after.strip().split('\n')
+        new_ref_lines = []
+        ref_num = 1
+        for line in ref_lines:
+            # Only process non-empty lines
+            if line.strip():
+                # Add anchor before each reference
+                anchor = f'<a id="ref-{ref_num}"></a>'
+                # Ensure each reference is a markdown list item
+                if not line.strip().startswith('- '):
+                    line = f'- {line.strip()}'
+                new_ref_lines.append(f'{anchor} {line}')
+                ref_num += 1
+        return before + '## References\n' + '\n'.join(new_ref_lines)
+    markdown = add_anchors_to_references(markdown)
+    return markdown
+
     @app.post("/generate-enhanced")
     def generate_enhanced_blog_post(request: Dict[str, Any]):
         """Generate a blog post with research and images using agents."""
@@ -464,9 +498,11 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             content = writing_agent.generate(topic, research_context)
             # Images
             images = image_agent.search(topic)
-            # Insert images into markdown
+            # Insert images into markdown (only in backend)
             content_with_images = insert_images_into_markdown(content, images)
-            word_count = len(content_with_images.split())
+            # Link citations to references and format references
+            final_markdown = link_citations_to_references(content_with_images)
+            word_count = len(final_markdown.split())
             post_id = f"post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             with get_db_connection() as conn:
                 cursor = conn.cursor()
@@ -486,7 +522,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
                 ''', (
                     post_id,
                     topic,
-                    content_with_images,
+                    final_markdown,
                     word_count,
                     datetime.now().isoformat(),
                     json.dumps(enhanced_metadata)
@@ -496,7 +532,7 @@ The key to success lies in careful planning, thoughtful implementation, and cont
             return {
                 "id": post_id,
                 "topic": topic,
-                "content": content_with_images,
+                "content": final_markdown,
                 "word_count": word_count,
                 "sources": sources,
                 "images": images,
